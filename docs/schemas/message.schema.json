@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anthropic.com/claude-agent-sdk/message.schema.json",
+  "title": "Claude SDK Message Types",
+  "description": "Generated from claude-agent-sdk v0.1.20",
+  "$defs": {
+    "UserMessage": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Unknown type: str | list[claude_agent_sdk.types.TextBlock | claude_agent_sdk.types.ThinkingBlock | claude_agent_sdk.types.ToolUseBlock | claude_agent_sdk.types.ToolResultBlock]"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        },
+        "parent_tool_use_id": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        }
+      },
+      "required": [
+        "content"
+      ]
+    },
+    "AssistantMessage": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Unknown type: claude_agent_sdk.types.TextBlock | claude_agent_sdk.types.ThinkingBlock | claude_agent_sdk.types.ToolUseBlock | claude_agent_sdk.types.ToolResultBlock"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "parent_tool_use_id": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        },
+        "error": {
+          "oneOf": [
+            {
+              "enum": [
+                "authentication_failed",
+                "billing_error",
+                "rate_limit",
+                "invalid_request",
+                "server_error",
+                "unknown"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "content",
+        "model"
+      ]
+    },
+    "SystemMessage": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "subtype",
+        "data"
+      ]
+    },
+    "ResultMessage": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "duration_api_ms": {
+          "type": "integer"
+        },
+        "is_error": {
+          "type": "boolean"
+        },
+        "num_turns": {
+          "type": "integer"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "total_cost_usd": {
+          "type": "string",
+          "description": "Unknown type: float | None"
+        },
+        "usage": {
+          "type": "string",
+          "description": "Unknown type: dict[str, typing.Any] | None"
+        },
+        "result": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        },
+        "structured_output": {}
+      },
+      "required": [
+        "subtype",
+        "duration_ms",
+        "duration_api_ms",
+        "is_error",
+        "num_turns",
+        "session_id"
+      ]
+    },
+    "StreamEvent": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "event": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "parent_tool_use_id": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        }
+      },
+      "required": [
+        "uuid",
+        "session_id",
+        "event"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/UserMessage"
+    },
+    {
+      "$ref": "#/$defs/AssistantMessage"
+    },
+    {
+      "$ref": "#/$defs/SystemMessage"
+    },
+    {
+      "$ref": "#/$defs/ResultMessage"
+    },
+    {
+      "$ref": "#/$defs/StreamEvent"
+    }
+  ]
+}

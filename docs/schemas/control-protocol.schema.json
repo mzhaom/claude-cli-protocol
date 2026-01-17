@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anthropic.com/claude-agent-sdk/control-protocol.schema.json",
+  "title": "Claude SDK Control Protocol",
+  "description": "Generated from claude-agent-sdk v0.1.20",
+  "$defs": {
+    "SDKControlRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "control_request"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string",
+          "description": "Unknown type: claude_agent_sdk.types.SDKControlInterruptRequest | claude_agent_sdk.types.SDKControlPermissionRequest | claude_agent_sdk.types.SDKControlInitializeRequest | claude_agent_sdk.types.SDKControlSetPermissionModeRequest | claude_agent_sdk.types.SDKHookCallbackRequest | claude_agent_sdk.types.SDKControlMcpMessageRequest | claude_agent_sdk.types.SDKControlRewindFilesRequest"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "request"
+      ]
+    },
+    "SDKControlResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "control_response"
+        },
+        "response": {
+          "type": "string",
+          "description": "Unknown type: claude_agent_sdk.types.ControlResponse | claude_agent_sdk.types.ControlErrorResponse"
+        }
+      },
+      "required": [
+        "type",
+        "response"
+      ]
+    },
+    "SDKControlInterruptRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "interrupt"
+        }
+      },
+      "required": [
+        "subtype"
+      ]
+    },
+    "SDKControlPermissionRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "can_use_tool"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "permission_suggestions": {
+          "type": "string",
+          "description": "Unknown type: list[typing.Any] | None"
+        },
+        "blocked_path": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        }
+      },
+      "required": [
+        "subtype",
+        "tool_name",
+        "input",
+        "permission_suggestions",
+        "blocked_path"
+      ]
+    },
+    "SDKControlInitializeRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "initialize"
+        },
+        "hooks": {
+          "type": "string",
+          "description": "Unknown type: dict[typing.Union[typing.Literal['PreToolUse'], typing.Literal['PostToolUse'], typing.Literal['UserPromptSubmit'], typing.Literal['Stop'], typing.Literal['SubagentStop'], typing.Literal['PreCompact']], typing.Any] | None"
+        }
+      },
+      "required": [
+        "subtype",
+        "hooks"
+      ]
+    },
+    "SDKControlSetPermissionModeRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "set_permission_mode"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subtype",
+        "mode"
+      ]
+    },
+    "SDKHookCallbackRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "hook_callback"
+        },
+        "callback_id": {
+          "type": "string"
+        },
+        "input": {},
+        "tool_use_id": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        }
+      },
+      "required": [
+        "subtype",
+        "callback_id",
+        "input",
+        "tool_use_id"
+      ]
+    },
+    "SDKControlMcpMessageRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "mcp_message"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "message": {}
+      },
+      "required": [
+        "subtype",
+        "server_name",
+        "message"
+      ]
+    },
+    "SDKControlRewindFilesRequest": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "rewind_files"
+        },
+        "user_message_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subtype",
+        "user_message_id"
+      ]
+    },
+    "ControlResponse": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "success"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "response": {
+          "type": "string",
+          "description": "Unknown type: dict[str, typing.Any] | None"
+        }
+      },
+      "required": [
+        "subtype",
+        "request_id",
+        "response"
+      ]
+    },
+    "ControlErrorResponse": {
+      "type": "object",
+      "properties": {
+        "subtype": {
+          "const": "error"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subtype",
+        "request_id",
+        "error"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SDKControlRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlResponse"
+    },
+    {
+      "$ref": "#/$defs/SDKControlInterruptRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlPermissionRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlInitializeRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlSetPermissionModeRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKHookCallbackRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlMcpMessageRequest"
+    },
+    {
+      "$ref": "#/$defs/SDKControlRewindFilesRequest"
+    },
+    {
+      "$ref": "#/$defs/ControlResponse"
+    },
+    {
+      "$ref": "#/$defs/ControlErrorResponse"
+    }
+  ]
+}

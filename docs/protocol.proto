@@ -1,0 +1,438 @@
+// Claude Agent SDK Protocol Specification
+// Auto-generated from Python type definitions
+// SDK Version: 0.1.20
+// CLI Version: 2.1.9
+
+syntax = "proto3";
+
+package claude.agent.sdk;
+
+import "google/protobuf/struct.proto";
+
+// ============================================================================
+// Message Types
+// ============================================================================
+
+// User message.
+message UserMessage {
+  google.protobuf.Value content = 1;
+  optional google.protobuf.Value uuid = 2;
+  optional google.protobuf.Value parent_tool_use_id = 3;
+}
+
+// Assistant message with content blocks.
+message AssistantMessage {
+  repeated google.protobuf.Value content = 1;
+  string model = 2;
+  optional google.protobuf.Value parent_tool_use_id = 3;
+  optional string error = 4;
+}
+
+// System message with metadata.
+message SystemMessage {
+  string subtype = 1;
+  map<string, google.protobuf.Value> data = 2;
+}
+
+// Result message with cost and usage information.
+message ResultMessage {
+  string subtype = 1;
+  int64 duration_ms = 2;
+  int64 duration_api_ms = 3;
+  bool is_error = 4;
+  int64 num_turns = 5;
+  string session_id = 6;
+  optional google.protobuf.Value total_cost_usd = 7;
+  optional google.protobuf.Value usage = 8;
+  optional google.protobuf.Value result = 9;
+  optional google.protobuf.Value structured_output = 10;
+}
+
+// Stream event for partial message updates during streaming.
+message StreamEvent {
+  string uuid = 1;
+  string session_id = 2;
+  map<string, google.protobuf.Value> event = 3;
+  optional google.protobuf.Value parent_tool_use_id = 4;
+}
+
+// ============================================================================
+// Content Block Types
+// ============================================================================
+
+// Text content block.
+message TextBlock {
+  string text = 1;
+}
+
+// Thinking content block.
+message ThinkingBlock {
+  string thinking = 1;
+  string signature = 2;
+}
+
+// Tool use content block.
+message ToolUseBlock {
+  string id = 1;
+  string name = 2;
+  map<string, google.protobuf.Value> input = 3;
+}
+
+// Tool result content block.
+message ToolResultBlock {
+  string tool_use_id = 1;
+  optional google.protobuf.Value content = 2;
+  optional google.protobuf.Value is_error = 3;
+}
+
+// ============================================================================
+// Control Protocol Types
+// ============================================================================
+
+message SDKControlInterruptRequest {
+  string subtype = 1;
+}
+
+message SDKControlPermissionRequest {
+  string subtype = 1;
+  string tool_name = 2;
+  map<string, google.protobuf.Value> input = 3;
+  google.protobuf.Value permission_suggestions = 4;
+  google.protobuf.Value blocked_path = 5;
+}
+
+message SDKControlInitializeRequest {
+  string subtype = 1;
+  google.protobuf.Value hooks = 2;
+}
+
+message SDKControlSetPermissionModeRequest {
+  string subtype = 1;
+  string mode = 2;
+}
+
+message SDKHookCallbackRequest {
+  string subtype = 1;
+  string callback_id = 2;
+  google.protobuf.Value input = 3;
+  google.protobuf.Value tool_use_id = 4;
+}
+
+message SDKControlMcpMessageRequest {
+  string subtype = 1;
+  string server_name = 2;
+  google.protobuf.Value message = 3;
+}
+
+message SDKControlRewindFilesRequest {
+  string subtype = 1;
+  string user_message_id = 2;
+}
+
+message ControlResponse {
+  string subtype = 1;
+  string request_id = 2;
+  google.protobuf.Value response = 3;
+}
+
+message ControlErrorResponse {
+  string subtype = 1;
+  string request_id = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Hook Types
+// ============================================================================
+
+// Input data for PreToolUse hook events.
+message PreToolUseHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  string tool_name = 6;
+  map<string, google.protobuf.Value> tool_input = 7;
+}
+
+// Input data for PostToolUse hook events.
+message PostToolUseHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  string tool_name = 6;
+  map<string, google.protobuf.Value> tool_input = 7;
+  google.protobuf.Value tool_response = 8;
+}
+
+// Input data for UserPromptSubmit hook events.
+message UserPromptSubmitHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  string prompt = 6;
+}
+
+// Input data for Stop hook events.
+message StopHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  bool stop_hook_active = 6;
+}
+
+// Input data for SubagentStop hook events.
+message SubagentStopHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  bool stop_hook_active = 6;
+}
+
+// Input data for PreCompact hook events.
+message PreCompactHookInput {
+  string session_id = 1;
+  string transcript_path = 2;
+  string cwd = 3;
+  optional string permission_mode = 4;
+  string hook_event_name = 5;
+  string trigger = 6;
+  google.protobuf.Value custom_instructions = 7;
+}
+
+// Async hook output that defers hook execution.
+// 
+// Fields:
+// async_: Set to True to defer hook execution. Note: This is converted to
+// "async" when sent to the CLI - use "async_" in your Python code.
+// asyncTimeout: Optional timeout in milliseconds for the async operation.
+message AsyncHookJSONOutput {
+  string async_ = 1;
+  optional int64 asyncTimeout = 2;
+}
+
+// Synchronous hook output with control and decision fields.
+// 
+// This defines the structure for hook callbacks to control execution and provide
+// feedback to Claude.
+// 
+// Common Control Fields:
+// continue_: Whether Claude should proceed after hook execution (default: True).
+// Note: This is converted to "continue" when sent to the CLI.
+// suppressOutput: Hide stdout from transcript mode (default: False).
+// stopReason: Message shown when continue is False.
+// 
+// Decision Fields:
+// decision: Set to "block" to indicate blocking behavior.
+// systemMessage: Warning message displayed to the user.
+// reason: Feedback message for Claude about the decision.
+// 
+// Hook-Specific Output:
+// hookSpecificOutput: Event-specific controls (e.g., permissionDecision for
+// PreToolUse, additionalContext for PostToolUse).
+// 
+// Note: The CLI documentation shows field names without underscores ("async", "continue"),
+// but Python code should use the underscore versions ("async_", "continue_") as they
+// are automatically converted.
+message SyncHookJSONOutput {
+  optional bool continue_ = 1;
+  optional bool suppressOutput = 2;
+  optional string stopReason = 3;
+  optional string decision = 4;
+  optional string systemMessage = 5;
+  optional string reason = 6;
+  optional google.protobuf.Value hookSpecificOutput = 7;
+}
+
+// ============================================================================
+// Permission Types
+// ============================================================================
+
+// Allow permission result.
+message PermissionResultAllow {
+  optional string behavior = 1;
+  optional google.protobuf.Value updated_input = 2;
+  optional google.protobuf.Value updated_permissions = 3;
+}
+
+// Deny permission result.
+message PermissionResultDeny {
+  optional string behavior = 1;
+  optional string message = 2;
+  optional bool interrupt = 3;
+}
+
+// Permission update configuration.
+message PermissionUpdate {
+  string type = 1;
+  optional google.protobuf.Value rules = 2;
+  optional string behavior = 3;
+  optional string mode = 4;
+  optional google.protobuf.Value directories = 5;
+  optional string destination = 6;
+}
+
+// Permission rule value.
+message PermissionRuleValue {
+  string tool_name = 1;
+  optional google.protobuf.Value rule_content = 2;
+}
+
+// Context information for tool permission callbacks.
+message ToolPermissionContext {
+  optional google.protobuf.Value signal = 1;
+  repeated PermissionUpdate suggestions = 2;
+}
+
+// ============================================================================
+// MCP Server Configuration Types
+// ============================================================================
+
+// MCP stdio server configuration.
+message McpStdioServerConfig {
+  optional string type = 1;
+  string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+}
+
+// MCP SSE server configuration.
+message McpSSEServerConfig {
+  string type = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+}
+
+// MCP HTTP server configuration.
+message McpHttpServerConfig {
+  string type = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+}
+
+// SDK MCP server configuration.
+message McpSdkServerConfig {
+  string type = 1;
+  string name = 2;
+  google.protobuf.Value instance = 3;
+}
+
+// ============================================================================
+// SDK Configuration Types
+// ============================================================================
+
+// Query options for Claude SDK.
+message ClaudeAgentOptions {
+  optional google.protobuf.Value tools = 1;
+  repeated string allowed_tools = 2;
+  optional google.protobuf.Value system_prompt = 3;
+  optional google.protobuf.Value mcp_servers = 4;
+  optional string permission_mode = 5;
+  optional bool continue_conversation = 6;
+  optional google.protobuf.Value resume = 7;
+  optional google.protobuf.Value max_turns = 8;
+  optional google.protobuf.Value max_budget_usd = 9;
+  repeated string disallowed_tools = 10;
+  optional google.protobuf.Value model = 11;
+  optional google.protobuf.Value fallback_model = 12;
+  repeated string betas = 13;
+  optional google.protobuf.Value permission_prompt_tool_name = 14;
+  optional google.protobuf.Value cwd = 15;
+  optional google.protobuf.Value cli_path = 16;
+  optional google.protobuf.Value settings = 17;
+  repeated google.protobuf.Value add_dirs = 18;
+  map<string, string> env = 19;
+  map<string, google.protobuf.Value> extra_args = 20;
+  optional google.protobuf.Value max_buffer_size = 21;
+  optional google.protobuf.Value debug_stderr = 22;
+  optional google.protobuf.Value stderr = 23;
+  optional google.protobuf.Value can_use_tool = 24;
+  optional google.protobuf.Value hooks = 25;
+  optional google.protobuf.Value user = 26;
+  optional bool include_partial_messages = 27;
+  optional bool fork_session = 28;
+  optional google.protobuf.Value agents = 29;
+  optional google.protobuf.Value setting_sources = 30;
+  optional google.protobuf.Value sandbox = 31;
+  repeated SdkPluginConfig plugins = 32;
+  optional google.protobuf.Value max_thinking_tokens = 33;
+  optional google.protobuf.Value output_format = 34;
+  optional bool enable_file_checkpointing = 35;
+}
+
+// Sandbox settings configuration.
+// 
+// This controls how Claude Code sandboxes bash commands for filesystem
+// and network isolation.
+// 
+// **Important:** Filesystem and network restrictions are configured via permission
+// rules, not via these sandbox settings:
+// - Filesystem read restrictions: Use Read deny rules
+// - Filesystem write restrictions: Use Edit allow/deny rules
+// - Network restrictions: Use WebFetch allow/deny rules
+// 
+// Attributes:
+// enabled: Enable bash sandboxing (macOS/Linux only). Default: False
+// autoAllowBashIfSandboxed: Auto-approve bash commands when sandboxed. Default: True
+// excludedCommands: Commands that should run outside the sandbox (e.g., ["git", "docker"])
+// allowUnsandboxedCommands: Allow commands to bypass sandbox via dangerouslyDisableSandbox.
+// When False, all commands must run sandboxed (or be in excludedCommands). Default: True
+// network: Network configuration for sandbox.
+// ignoreViolations: Violations to ignore.
+// enableWeakerNestedSandbox: Enable weaker sandbox for unprivileged Docker environments
+// (Linux only). Reduces security. Default: False
+// 
+// Example:
+// ```python
+// sandbox_settings: SandboxSettings = {
+// "enabled": True,
+// "autoAllowBashIfSandboxed": True,
+// "excludedCommands": ["docker"],
+// "network": {
+// "allowUnixSockets": ["/var/run/docker.sock"],
+// "allowLocalBinding": True
+// }
+// }
+// ```
+message SandboxSettings {
+  bool enabled = 1;
+  bool autoAllowBashIfSandboxed = 2;
+  repeated string excludedCommands = 3;
+  bool allowUnsandboxedCommands = 4;
+  SandboxNetworkConfig network = 5;
+  SandboxIgnoreViolations ignoreViolations = 6;
+  bool enableWeakerNestedSandbox = 7;
+}
+
+// Network configuration for sandbox.
+// 
+// Attributes:
+// allowUnixSockets: Unix socket paths accessible in sandbox (e.g., SSH agents).
+// allowAllUnixSockets: Allow all Unix sockets (less secure).
+// allowLocalBinding: Allow binding to localhost ports (macOS only).
+// httpProxyPort: HTTP proxy port if bringing your own proxy.
+// socksProxyPort: SOCKS5 proxy port if bringing your own proxy.
+message SandboxNetworkConfig {
+  repeated string allowUnixSockets = 1;
+  bool allowAllUnixSockets = 2;
+  bool allowLocalBinding = 3;
+  int64 httpProxyPort = 4;
+  int64 socksProxyPort = 5;
+}
+
+// Agent definition configuration.
+message AgentDefinition {
+  string description = 1;
+  string prompt = 2;
+  optional google.protobuf.Value tools = 3;
+  optional string model = 4;
+}

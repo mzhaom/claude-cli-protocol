@@ -1,0 +1,3879 @@
+{
+  "generated_at": "2026-01-17T02:58:30.264400+00:00",
+  "sdk_version": "0.1.20",
+  "cli_version": "2.1.9",
+  "traces": [
+    {
+      "name": "string_mode_simple",
+      "description": "Simple one-shot query in string mode",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 2+2? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 2+2? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "4"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1054,
+          "duration_api_ms": 1039,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "4",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "string_mode_system_prompt",
+      "description": "Query with custom system prompt",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "system_prompt": "You are a helpful assistant. Always respond with exactly one word.",
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "Hello",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Hello"
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "Hello!"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1120,
+          "duration_api_ms": 1109,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016217,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15937,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "Hello!",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "streaming_mode_simple",
+      "description": "Simple interactive query in streaming mode",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 3+3? Reply with just the number."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 3+3? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "6"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1106,
+          "duration_api_ms": 1095,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "6",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "permission_mode_default",
+      "description": "Default permission mode - CLI prompts for dangerous tools",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "default",
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 5+5? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 5+5? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "10"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1203,
+          "duration_api_ms": 1196,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "10",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "permission_mode_bypass",
+      "description": "Bypass permissions - allows all tools without prompting",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "bypassPermissions",
+        "max_turns": 2,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "Read the file at /tmp/<tmpdir>/test.txt and tell me its contents.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Read the file at /tmp/<tmpdir>/test.txt and tell me its contents."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "bypassPermissions",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "I'll read that file for you."
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "ToolUseBlock",
+              "id": "toolu_01Kycoiu72XVoNu8agkX5CuH",
+              "name": "Read",
+              "input": {
+                "file_path": "/tmp/<tmpdir>/test.txt"
+              }
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "UserMessage",
+          "content": [
+            {
+              "_type": "ToolResultBlock",
+              "tool_use_id": "toolu_01Kycoiu72XVoNu8agkX5CuH",
+              "content": "     1\u2192Hello from test file!\n\n<system-reminder>\nWhenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.\n</system-reminder>\n",
+              "is_error": null
+            }
+          ],
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "The file contains a single line of text:\n\n```\nHello from test file!\n```\n\nThat's the complete contents of the file at that path."
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1959,
+          "duration_api_ms": 1927,
+          "is_error": false,
+          "num_turns": 2,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.004587000000000001,
+          "usage": {
+            "input_tokens": 9,
+            "cache_creation_input_tokens": 576,
+            "cache_read_input_tokens": 31580,
+            "output_tokens": 140,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 576
+            }
+          },
+          "result": "The file contains a single line of text:\n\n```\nHello from test file!\n```\n\nThat's the complete contents of the file at that path.",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "permission_mode_accept_edits",
+      "description": "Accept edits mode - auto-approves file modifications",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "acceptEdits",
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 6+6? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 6+6? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "acceptEdits",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "12"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1044,
+          "duration_api_ms": 1035,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "12",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "tool_use_permission_callback",
+      "description": "Tool use with SDK permission callback - demonstrates can_use_tool control request",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": "{'permission_test': {'type': 'sdk', 'name': 'permission_test', 'instance': <mcp.server.lowlevel.server.Server object at 0x10bbb3f20>}}",
+        "max_turns": 2,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "can_use_tool": "<can_use_tool>",
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Use the test_action tool with message 'hello world'"
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Use the test_action tool with message 'hello world'"
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch",
+              "mcp__permission_test__test_action"
+            ],
+            "mcp_servers": [
+              {
+                "name": "permission_test",
+                "status": "connected"
+              }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "ToolUseBlock",
+              "id": "toolu_01U2qNCt8bJnWF4JdUNmG2np",
+              "name": "mcp__permission_test__test_action",
+              "input": {
+                "message": "hello world"
+              }
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "UserMessage",
+          "content": [
+            {
+              "_type": "ToolResultBlock",
+              "tool_use_id": "toolu_01U2qNCt8bJnWF4JdUNmG2np",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Executed: hello world"
+                }
+              ],
+              "is_error": null
+            }
+          ],
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "Done! I've called the test_action tool with the message \"hello world\". The action was executed successfully."
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1466,
+          "duration_api_ms": 1430,
+          "is_error": false,
+          "num_turns": 2,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0061379,
+          "usage": {
+            "input_tokens": 9,
+            "cache_creation_input_tokens": 2158,
+            "cache_read_input_tokens": 29914,
+            "output_tokens": 88,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 2158
+            }
+          },
+          "result": "Done! I've called the test_action tool with the message \"hello world\". The action was executed successfully.",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [
+        {
+          "type": "can_use_tool",
+          "tool_name": "mcp__permission_test__test_action",
+          "input": {
+            "message": "hello world"
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "name": "control_set_model",
+      "description": "Demonstrates set_model control request to switch models mid-session",
+      "mode": "streaming_with_control",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 7+7? Reply with just the number."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 7+7? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-sonnet-4-5-20250929",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "14"
+            }
+          ],
+          "model": "claude-sonnet-4-5-20250929",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1632,
+          "duration_api_ms": 1623,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.004864799999999999,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "14",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [
+        {
+          "type": "set_model",
+          "params": {
+            "model": "sonnet"
+          }
+        }
+      ],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "control_set_permission_mode",
+      "description": "Demonstrates set_permission_mode control request",
+      "mode": "streaming_with_control",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 8+8? Reply with just the number."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 8+8? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "acceptEdits",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "16"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 882,
+          "duration_api_ms": 874,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "16",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [
+        {
+          "type": "set_permission_mode",
+          "params": {
+            "mode": "acceptEdits"
+          }
+        }
+      ],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "control_interrupt",
+      "description": "Demonstrates interrupt control request to stop execution",
+      "mode": "streaming_with_control",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Count from 1 to 100, one number at a time."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Count from 1 to 100, one number at a time."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "I'll count from 1 to 100, one number at a time:\n\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n88\n89\n90\n91\n92\n93\n94\n95\n96\n97\n98\n99\n100\n\nDone! \u2713"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        }
+      ],
+      "control_requests_sent": [
+        {
+          "type": "interrupt",
+          "params": {}
+        }
+      ],
+      "control_requests_received": [],
+      "error": "ProcessTransport is not ready for writing"
+    },
+    {
+      "name": "control_rewind_files",
+      "description": "Demonstrates rewind_files control request to restore file state",
+      "mode": "streaming_with_control",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "bypassPermissions",
+        "max_turns": 2,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": [],
+        "enable_file_checkpointing": true
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Read the file at /tmp/<tmpdir>/rewind_test.txt and tell me its contents."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Read the file at /tmp/<tmpdir>/rewind_test.txt and tell me its contents."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "bypassPermissions",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "I'll read that file for you."
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "ToolUseBlock",
+              "id": "toolu_011vEPPizyrAAXUdFkRQFJFH",
+              "name": "Read",
+              "input": {
+                "file_path": "/tmp/<tmpdir>/rewind_test.txt"
+              }
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "UserMessage",
+          "content": [
+            {
+              "_type": "ToolResultBlock",
+              "tool_use_id": "toolu_011vEPPizyrAAXUdFkRQFJFH",
+              "content": "     1\u2192Original content for rewind test\n\n<system-reminder>\nWhenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.\n</system-reminder>\n",
+              "is_error": null
+            }
+          ],
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "parent_tool_use_id": null
+        }
+      ],
+      "control_requests_sent": [
+        {
+          "type": "rewind_files",
+          "params": {
+            "user_message_id": "00000000-0000-0000-0000-000000000000"
+          }
+        }
+      ],
+      "control_requests_received": [],
+      "error": "ProcessTransport is not ready for writing"
+    },
+    {
+      "name": "streaming_partial_messages",
+      "description": "Query with partial message streaming enabled",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "include_partial_messages": true,
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Count from 1 to 5."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Count from 1 to 5."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "model": "claude-haiku-4-5-20251001",
+              "id": "msg_01AKQun2YYndM1gd7DiBPnBy",
+              "type": "message",
+              "role": "assistant",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 3,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 15932,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 0
+                },
+                "output_tokens": 1,
+                "service_tier": "standard"
+              }
+            }
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "1\n2\n3\n4"
+            }
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "\n5"
+            }
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "1\n2\n3\n4\n5"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "end_turn",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 3,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 15932,
+              "output_tokens": 13
+            }
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "StreamEvent",
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "event": {
+            "type": "message_stop"
+          },
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1022,
+          "duration_api_ms": 1009,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016612000000000003,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15932,
+            "output_tokens": 13,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "1\n2\n3\n4\n5",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "file_checkpointing",
+      "description": "Query with file checkpointing enabled for rewind support",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": [],
+        "enable_file_checkpointing": true
+      },
+      "prompt": "What is 9+9? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 9+9? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "18"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 778,
+          "duration_api_ms": 769,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "18",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "subagents_custom",
+      "description": "Query with custom subagent definitions",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "agents": "{'research-agent': AgentDefinition(description='An agent for research tasks', prompt='You are a research assistant. Be concise.', tools=['Read', 'Grep', 'Glob'], model='haiku'), 'code-agent': AgentDefinition(description='An agent for coding tasks', prompt='You are a coding assistant.', tools=['Read', 'Write', 'Edit', 'Bash'], model='sonnet')}",
+        "plugins": []
+      },
+      "prompt": "What is 10+10? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 10+10? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan",
+              "research-agent",
+              "code-agent"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "20"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1687,
+          "duration_api_ms": 1679,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016261,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15981,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "20",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "mcp_servers",
+      "description": "Query with MCP server configuration",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {
+          "filesystem": {
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+              "-y",
+              "@anthropic/mcp-server-filesystem",
+              "/tmp"
+            ]
+          },
+          "memory": {
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+              "-y",
+              "@anthropic/mcp-server-memory"
+            ]
+          }
+        },
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 11+11? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 11+11? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [
+              {
+                "name": "filesystem",
+                "status": "failed"
+              },
+              {
+                "name": "memory",
+                "status": "failed"
+              }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "22"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 728,
+          "duration_api_ms": 715,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "22",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "hooks_pre_tool_use",
+      "description": "Hook callback triggered by tool use - demonstrates hook_callback control request",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "bypassPermissions",
+        "max_turns": 2,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "hooks": "<hooks>",
+        "plugins": []
+      },
+      "prompt": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Read the file at /tmp/<tmpdir>/test.txt. Use the Read tool."
+          }
+        }
+      ],
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Read the file at /tmp/<tmpdir>/test.txt. Use the Read tool."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "bypassPermissions",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "ToolUseBlock",
+              "id": "toolu_01TMVygf28Royg2oAgtHmEBL",
+              "name": "Read",
+              "input": {
+                "file_path": "/tmp/<tmpdir>/test.txt"
+              }
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "UserMessage",
+          "content": [
+            {
+              "_type": "ToolResultBlock",
+              "tool_use_id": "toolu_01TMVygf28Royg2oAgtHmEBL",
+              "content": "     1\u2192Hello from test file!\n\n<system-reminder>\nWhenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.\n</system-reminder>\n",
+              "is_error": null
+            }
+          ],
+          "uuid": "00000000-0000-0000-0000-000000000000",
+          "parent_tool_use_id": null
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "I've successfully read the file. Here's its contents:\n\n**File: /tmp/<tmpdir>/test.txt**\n\n```\nHello from test file!\n```\n\nThe file contains a single line with the message \"Hello from test file!\""
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 3444,
+          "duration_api_ms": 3406,
+          "is_error": false,
+          "num_turns": 2,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.004812,
+          "usage": {
+            "input_tokens": 9,
+            "cache_creation_input_tokens": 568,
+            "cache_read_input_tokens": 31580,
+            "output_tokens": 187,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 568
+            }
+          },
+          "result": "I've successfully read the file. Here's its contents:\n\n**File: /tmp/<tmpdir>/test.txt**\n\n```\nHello from test file!\n```\n\nThe file contains a single line with the message \"Hello from test file!\"",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [
+        {
+          "type": "hook_callback",
+          "hook_event": "PreToolUse",
+          "tool_name": "Read"
+        }
+      ],
+      "error": null
+    },
+    {
+      "name": "setting_sources_project",
+      "description": "Query with setting_sources=['project'] to use only project settings",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "setting_sources": [
+          "project"
+        ],
+        "plugins": []
+      },
+      "prompt": "What is 13+13? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 13+13? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "26"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 486,
+          "duration_api_ms": 477,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "26",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "setting_sources_user_local",
+      "description": "Query with setting_sources=['user', 'local']",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "setting_sources": [
+          "user",
+          "local"
+        ],
+        "plugins": []
+      },
+      "prompt": "What is 14+14? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 14+14? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "hook_response",
+          "data": {
+            "type": "system",
+            "subtype": "hook_response",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "uuid": "00000000-0000-0000-0000-000000000000",
+            "hook_name": "SessionStart:startup",
+            "hook_event": "SessionStart",
+            "stdout": "",
+            "stderr": "",
+            "exit_code": 0
+          }
+        },
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "acceptEdits",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "28"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 783,
+          "duration_api_ms": 775,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "28",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "session_resume",
+      "description": "Query demonstrating session resume capability",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 15+15? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 15+15? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "30"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 1108,
+          "duration_api_ms": 1101,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "30",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    },
+    {
+      "name": "plugins_config",
+      "description": "Query with plugins configuration",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "disallowed_tools": [],
+        "model": "haiku",
+        "betas": [],
+        "cwd": "/tmp/<tmpdir>",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "prompt": "What is 16+16? Reply with just the number.",
+      "messages_sent": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "What is 16+16? Reply with just the number."
+          }
+        }
+      ],
+      "messages_received": [
+        {
+          "_type": "SystemMessage",
+          "subtype": "init",
+          "data": {
+            "type": "system",
+            "subtype": "init",
+            "cwd": "/private/tmp/<tmpdir>",
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "tools": [
+              "Task",
+              "TaskOutput",
+              "Bash",
+              "Glob",
+              "Grep",
+              "ExitPlanMode",
+              "Read",
+              "Edit",
+              "Write",
+              "NotebookEdit",
+              "WebFetch",
+              "TodoWrite",
+              "WebSearch",
+              "KillShell",
+              "AskUserQuestion",
+              "Skill",
+              "EnterPlanMode",
+              "MCPSearch"
+            ],
+            "mcp_servers": [],
+            "model": "claude-haiku-4-5-20251001",
+            "permissionMode": "default",
+            "slash_commands": [
+              "compact",
+              "context",
+              "cost",
+              "init",
+              "pr-comments",
+              "release-notes",
+              "review",
+              "security-review"
+            ],
+            "apiKeySource": "none",
+            "claude_code_version": "2.1.9",
+            "output_style": "default",
+            "agents": [
+              "Bash",
+              "general-purpose",
+              "statusline-setup",
+              "Explore",
+              "Plan"
+            ],
+            "skills": [],
+            "plugins": [],
+            "uuid": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "_type": "AssistantMessage",
+          "content": [
+            {
+              "_type": "TextBlock",
+              "text": "32"
+            }
+          ],
+          "model": "claude-haiku-4-5-20251001",
+          "parent_tool_use_id": null,
+          "error": null
+        },
+        {
+          "_type": "ResultMessage",
+          "subtype": "success",
+          "duration_ms": 542,
+          "duration_api_ms": 532,
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "00000000-0000-0000-0000-000000000000",
+          "total_cost_usd": 0.0016216,
+          "usage": {
+            "input_tokens": 3,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 15936,
+            "output_tokens": 5,
+            "server_tool_use": {
+              "web_search_requests": 0,
+              "web_fetch_requests": 0
+            },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            }
+          },
+          "result": "32",
+          "structured_output": null
+        }
+      ],
+      "control_requests_sent": [],
+      "control_requests_received": [],
+      "error": null
+    }
+  ],
+  "cli_invocations": [
+    {
+      "name": "minimal_string_mode",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "minimal_streaming_mode",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--input-format",
+        "stream-json"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_system_prompt",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "system_prompt": "You are a helpful assistant.",
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "You are a helpful assistant.",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_append_system_prompt",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "system_prompt": {
+          "type": "preset",
+          "append": "Additional instructions."
+        },
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--append-system-prompt",
+        "Additional instructions.",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_model_options",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "model": "haiku",
+        "fallback_model": "sonnet",
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--model",
+        "haiku",
+        "--fallback-model",
+        "sonnet",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_tools_config",
+      "mode": "string",
+      "options": {
+        "tools": [
+          "Read",
+          "Write"
+        ],
+        "allowed_tools": [
+          "Bash"
+        ],
+        "mcp_servers": {},
+        "disallowed_tools": [
+          "WebSearch"
+        ],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--tools",
+        "Read,Write",
+        "--allowedTools",
+        "Bash",
+        "--disallowedTools",
+        "WebSearch",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_limits",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "max_turns": 5,
+        "max_budget_usd": 1.0,
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--max-turns",
+        "5",
+        "--max-budget-usd",
+        "1.0",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_permission_mode",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "permission_mode": "bypassPermissions",
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--permission-mode",
+        "bypassPermissions",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_continue",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "continue_conversation": true,
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--continue",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_resume",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "resume": "session-123",
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--resume",
+        "session-123",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_partial_messages",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "include_partial_messages": true,
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--include-partial-messages",
+        "--setting-sources",
+        "",
+        "--input-format",
+        "stream-json"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_fork_session",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "fork_session": true,
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--fork-session",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_betas",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [
+          "beta-feature-1"
+        ],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--betas",
+        "beta-feature-1",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_mcp_servers",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {
+          "test-server": {
+            "type": "stdio",
+            "command": "node",
+            "args": [
+              "server.js"
+            ]
+          }
+        },
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--mcp-config",
+        "{\"mcpServers\": {\"test-server\": {\"type\": \"stdio\", \"command\": \"node\", \"args\": [\"server.js\"]}}}",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_max_thinking_tokens",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": [],
+        "max_thinking_tokens": 1000
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--max-thinking-tokens",
+        "1000",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_json_schema",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": [],
+        "output_format": {
+          "type": "json_schema",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--json-schema",
+        "{\"type\": \"object\", \"properties\": {\"result\": {\"type\": \"string\"}}}",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_file_checkpointing",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": [],
+        "enable_file_checkpointing": true
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20",
+        "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING": "true"
+      }
+    },
+    {
+      "name": "with_cwd",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "cwd": "/tmp/test",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20",
+        "PWD": "/tmp/test"
+      }
+    },
+    {
+      "name": "with_add_dirs",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [
+          "/extra/dir1",
+          "/extra/dir2"
+        ],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--add-dir",
+        "/extra/dir1",
+        "--add-dir",
+        "/extra/dir2",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_settings",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "settings": "{\"key\": \"value\"}",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--settings",
+        "{\"key\": \"value\"}",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_agents",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "agents": "{'custom-agent': AgentDefinition(description='A custom agent for testing', prompt='You are a test agent.', tools=['Read'], model='haiku')}",
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--agents",
+        "{\"custom-agent\": {\"description\": \"A custom agent for testing\", \"prompt\": \"You are a test agent.\", \"tools\": [\"Read\"], \"model\": \"haiku\"}}",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_permission_prompt_tool",
+      "mode": "streaming",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "permission_prompt_tool_name": "stdio",
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--permission-prompt-tool",
+        "stdio",
+        "--setting-sources",
+        "",
+        "--input-format",
+        "stream-json"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_setting_sources_project",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "setting_sources": [
+          "project"
+        ],
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "project",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_setting_sources_multiple",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "setting_sources": [
+          "user",
+          "project",
+          "local"
+        ],
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "user,project,local",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_hooks",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "hooks": "<hooks>",
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_plugins_empty",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    },
+    {
+      "name": "with_sandbox",
+      "mode": "string",
+      "options": {
+        "allowed_tools": [],
+        "mcp_servers": {},
+        "disallowed_tools": [],
+        "betas": [],
+        "add_dirs": [],
+        "env": {},
+        "extra_args": {},
+        "sandbox": {
+          "enabled": true,
+          "network": {
+            "allow_hosts": [
+              "api.example.com"
+            ],
+            "block_hosts": [
+              "evil.com"
+            ]
+          }
+        },
+        "plugins": []
+      },
+      "command": [
+        "g/anthropics/claude-sdk-protocol-docs/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--system-prompt",
+        "",
+        "--settings",
+        "{\"sandbox\": {\"enabled\": true, \"network\": {\"allow_hosts\": [\"api.example.com\"], \"block_hosts\": [\"evil.com\"]}}}",
+        "--setting-sources",
+        "",
+        "--print",
+        "--",
+        "dummy"
+      ],
+      "env_vars": {
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-py",
+        "CLAUDE_AGENT_SDK_VERSION": "0.1.20"
+      }
+    }
+  ]
+}

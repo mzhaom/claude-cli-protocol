@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anthropic.com/claude-agent-sdk/hooks.schema.json",
+  "title": "Claude SDK Hook Types",
+  "description": "Generated from claude-agent-sdk v0.1.20",
+  "$defs": {
+    "PreToolUseHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "PreToolUse"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "tool_input": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "tool_name",
+        "tool_input"
+      ]
+    },
+    "PostToolUseHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "PostToolUse"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "tool_input": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "tool_response": {}
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "tool_name",
+        "tool_input",
+        "tool_response"
+      ]
+    },
+    "UserPromptSubmitHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "UserPromptSubmit"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "prompt"
+      ]
+    },
+    "StopHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "Stop"
+        },
+        "stop_hook_active": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "stop_hook_active"
+      ]
+    },
+    "SubagentStopHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "SubagentStop"
+        },
+        "stop_hook_active": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "stop_hook_active"
+      ]
+    },
+    "PreCompactHookInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "transcript_path": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "permission_mode": {
+          "type": "string"
+        },
+        "hook_event_name": {
+          "const": "PreCompact"
+        },
+        "trigger": {
+          "enum": [
+            "manual",
+            "auto"
+          ]
+        },
+        "custom_instructions": {
+          "type": "string",
+          "description": "Unknown type: str | None"
+        }
+      },
+      "required": [
+        "session_id",
+        "transcript_path",
+        "cwd",
+        "hook_event_name",
+        "trigger",
+        "custom_instructions"
+      ]
+    },
+    "AsyncHookJSONOutput": {
+      "type": "object",
+      "properties": {
+        "async_": {
+          "const": true
+        },
+        "asyncTimeout": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "async_"
+      ]
+    },
+    "SyncHookJSONOutput": {
+      "type": "object",
+      "properties": {
+        "continue_": {
+          "type": "boolean"
+        },
+        "suppressOutput": {
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string"
+        },
+        "decision": {
+          "const": "block"
+        },
+        "systemMessage": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "hookSpecificOutput": {
+          "type": "string",
+          "description": "Unknown type: claude_agent_sdk.types.PreToolUseHookSpecificOutput | claude_agent_sdk.types.PostToolUseHookSpecificOutput | claude_agent_sdk.types.UserPromptSubmitHookSpecificOutput | claude_agent_sdk.types.SessionStartHookSpecificOutput"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PreToolUseHookInput"
+    },
+    {
+      "$ref": "#/$defs/PostToolUseHookInput"
+    },
+    {
+      "$ref": "#/$defs/UserPromptSubmitHookInput"
+    },
+    {
+      "$ref": "#/$defs/StopHookInput"
+    },
+    {
+      "$ref": "#/$defs/SubagentStopHookInput"
+    },
+    {
+      "$ref": "#/$defs/PreCompactHookInput"
+    },
+    {
+      "$ref": "#/$defs/AsyncHookJSONOutput"
+    },
+    {
+      "$ref": "#/$defs/SyncHookJSONOutput"
+    }
+  ]
+}
