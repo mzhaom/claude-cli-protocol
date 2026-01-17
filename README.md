@@ -32,11 +32,11 @@ The generator produces the following files in the `docs/` directory:
 
 | File | Description |
 |------|-------------|
-| `docs/PROTOCOL_SPECIFICATION.md` | Human-readable protocol documentation |
-| `docs/schemas/message.schema.json` | JSON Schema for message types |
-| `docs/schemas/control-protocol.schema.json` | JSON Schema for control protocol |
-| `docs/schemas/hooks.schema.json` | JSON Schema for hook types |
-| `docs/traces/protocol_traces.json` | Captured protocol traces |
+| [`docs/PROTOCOL_SPECIFICATION.md`](docs/PROTOCOL_SPECIFICATION.md) | Human-readable protocol documentation |
+| [`docs/schemas/message.schema.json`](docs/schemas/message.schema.json) | JSON Schema for message types |
+| [`docs/schemas/control-protocol.schema.json`](docs/schemas/control-protocol.schema.json) | JSON Schema for control protocol |
+| [`docs/schemas/hooks.schema.json`](docs/schemas/hooks.schema.json) | JSON Schema for hook types |
+| [`docs/traces/protocol_traces.json`](docs/traces/protocol_traces.json) | Captured protocol traces |
 
 ## Discovery Mechanisms
 

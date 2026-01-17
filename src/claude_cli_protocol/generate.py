@@ -1817,7 +1817,7 @@ def generate_markdown(
     sections = []
 
     # Header
-    sections.append(f"""# Claude Agent SDK Protocol Specification
+    sections.append(f"""# Claude CLI Protocol Specification
 
 > **Generated**: {timestamp}
 > **SDK Version**: {__version__}

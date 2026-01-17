@@ -1,4 +1,4 @@
-# Claude Agent SDK Protocol Specification
+# Claude CLI Protocol Specification
 
 > **Generated**: 2026-01-17 02:58:30 UTC
 > **SDK Version**: 0.1.20
