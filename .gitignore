@@ -43,3 +43,21 @@ htmlcov/
 
 # Ruff
 .ruff_cache/
+
+# TypeScript / Node / Bun
+node_modules/
+dist/
+*.tsbuildinfo
+.eslintcache
+bun.lockb
+
+# Go
+bin/
+vendor/
+
+# Rust
+target/
+
+# OS
+.DS_Store
+Thumbs.db
