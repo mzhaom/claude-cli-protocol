@@ -2,6 +2,7 @@
 #
 # Usage:
 #   make test           - Run unit tests
+#   make chat-test      - Run chat UI tests (requires magit-section, transient)
 #   make integration    - Run integration tests (requires Claude CLI)
 #   make test-all       - Run all tests
 #   make lint           - Check for common issues
@@ -14,23 +15,36 @@ EMACS_BATCH = $(EMACS) --batch -Q
 SRC_DIR = .
 TEST_DIR = test
 
-# Source files
-SOURCES = claude-cli.el \
-          claude-cli-protocol.el \
-          claude-cli-process.el \
-          claude-cli-events.el \
-          claude-cli-state.el \
-          claude-cli-turn.el \
-          claude-cli-permission.el
+# Source files - SDK core
+SDK_SOURCES = claude-cli.el \
+              claude-cli-protocol.el \
+              claude-cli-process.el \
+              claude-cli-events.el \
+              claude-cli-state.el \
+              claude-cli-turn.el \
+              claude-cli-permission.el
+
+# Source files - Chat UI
+CHAT_SOURCES = claude-cli-chat.el \
+               claude-cli-chat-buffer.el \
+               claude-cli-chat-sections.el \
+               claude-cli-chat-input.el \
+               claude-cli-chat-faces.el \
+               claude-cli-chat-transient.el \
+               claude-cli-chat-navigation.el \
+               claude-cli-chat-export.el
+
+SOURCES = $(SDK_SOURCES) $(CHAT_SOURCES)
 
 # Test files
 UNIT_TESTS = $(TEST_DIR)/claude-test.el
+CHAT_TESTS = $(TEST_DIR)/claude-cli-chat-journey-test.el
 INTEGRATION_TESTS = $(TEST_DIR)/claude-integration-test.el
 
 # Load path
 LOAD_PATH = -L $(SRC_DIR) -L $(TEST_DIR)
 
-.PHONY: all test unit-test integration lint clean compile check-emacs
+.PHONY: all test unit-test chat-test integration lint clean compile check-emacs
 
 all: test
 
@@ -49,6 +63,18 @@ unit-test: check-emacs
 		-l claude-test \
 		-f ert-run-tests-batch-and-exit
 
+# Run chat UI tests (requires magit-section and transient packages)
+chat-test: check-emacs
+	@echo "Running chat UI tests..."
+	@echo "Note: Requires magit-section and transient packages"
+	$(EMACS_BATCH) $(LOAD_PATH) \
+		-l ert \
+		-l claude-cli-chat-journey-test \
+		--eval "(ert-run-tests-batch-and-exit '(tag :chat))" || \
+	$(EMACS_BATCH) $(LOAD_PATH) \
+		-l claude-cli-chat-journey-test \
+		-f claude-cli-chat-test-run-all
+
 # Run integration tests (requires Claude CLI and API key)
 integration: check-emacs
 	@echo "Running integration tests..."
@@ -58,7 +84,7 @@ integration: check-emacs
 		-f claude-integration-test-run-all
 
 # Run all tests
-test-all: unit-test integration
+test-all: unit-test chat-test integration
 
 # Byte-compile all source files
 compile: check-emacs
@@ -90,6 +116,7 @@ help:
 	@echo "Targets:"
 	@echo "  test         - Run unit tests (default)"
 	@echo "  unit-test    - Run unit tests"
+	@echo "  chat-test    - Run chat UI tests (requires magit-section, transient)"
 	@echo "  integration  - Run integration tests (requires Claude CLI)"
 	@echo "  test-all     - Run all tests"
 	@echo "  compile      - Byte-compile source files"
@@ -101,5 +128,6 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test"
+	@echo "  make chat-test"
 	@echo "  make integration"
 	@echo "  EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs make test"

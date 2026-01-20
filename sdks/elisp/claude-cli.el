@@ -83,9 +83,10 @@ When nil, uses `default-directory'."
   :type '(choice (const nil) directory)
   :group 'claude-cli)
 
-(defcustom claude-cli-ask-timeout 60
-  "Default timeout in seconds for `claude-cli-ask'."
-  :type 'number
+(defcustom claude-cli-ask-timeout nil
+  "Default timeout in seconds for `claude-cli-ask'.
+When nil, wait indefinitely for response."
+  :type '(choice (const :tag "Unlimited" nil) number)
   :group 'claude-cli)
 
 ;;; Error types
@@ -174,8 +175,9 @@ Returns SESSION on success, signals error on failure."
   (setf (claude-cli-session-line-handler session)
         (claude-cli-process-make-line-handler #'claude-cli--handle-line))
 
-  ;; Build session data for callbacks
-  (let ((session-data (list :session session)))
+  ;; Build session data for callbacks (include config for process-start)
+  (let ((session-data (list :session session
+                            :config (claude-cli-session-config session))))
     ;; Start process
     (setf (claude-cli-session-process session)
           (claude-cli-process-start
@@ -231,6 +233,7 @@ fired when the turn finishes."
 (defun claude-cli-ask (session content &optional timeout)
   "Send CONTENT to SESSION and wait for response (blocking).
 Optional TIMEOUT in seconds (default `claude-cli-ask-timeout').
+When timeout is nil, wait indefinitely.
 Returns a `claude-cli-turn-result' struct, or nil on timeout.
 
 Example:
@@ -249,12 +252,14 @@ Example:
           (claude-cli-session-pending-completions session))
 
     ;; Wait for completion, processing events
+    ;; When timeout-secs is nil, wait indefinitely
     (while (and (null result)
                 (not timed-out)
                 (claude-cli-process-alive-p (claude-cli-session-process session)))
       (accept-process-output nil 0.1)
-      (when (> (float-time (time-subtract (current-time) start-time))
-               timeout-secs)
+      (when (and timeout-secs
+                 (> (float-time (time-subtract (current-time) start-time))
+                    timeout-secs))
         (setq timed-out t)))
 
     ;; Clean up pending if timed out

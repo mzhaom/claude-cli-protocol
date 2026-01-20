@@ -160,20 +160,87 @@ Custom handler example:
 (setq claude-cli-default-model "sonnet")           ; Default model
 (setq claude-cli-default-permission-mode 'default) ; Default permission mode
 (setq claude-cli-cli-path "/path/to/claude")       ; CLI binary path
-(setq claude-cli-ask-timeout 120)                  ; Timeout for claude-cli-ask
+(setq claude-cli-ask-timeout 120)                  ; Timeout for claude-cli-ask (nil = unlimited)
 ```
+
+## Claude Chat UI
+
+The SDK includes a modern interactive chat interface with streaming responses, collapsible sections, and transient menus.
+
+### Quick Start
+
+```elisp
+M-x claude-cli-chat
+```
+
+### Features
+
+- **Streaming responses** with real-time text display
+- **Magit-style collapsible sections** for turns, thinking, and tool calls
+- **Transient menus** for model and permission mode switching
+- **Token usage and cost tracking** in the header line
+- **Export to Markdown, Org-mode, JSON, or plain text**
+- **Input history** with M-p/M-n navigation
+
+### Key Bindings
+
+**In conversation area:**
+
+| Key | Action |
+|-----|--------|
+| `n` / `p` | Next/previous turn |
+| `M-n` / `M-p` | Next/previous section |
+| `TAB` | Toggle section collapse/expand |
+| `i` | Focus input area |
+| `?` | Open command menu |
+| `g` | Refresh display |
+| `q` | Quit window |
+
+**In input area:**
+
+| Key | Action |
+|-----|--------|
+| `C-c C-c` | Send message |
+| `C-RET` / `M-RET` | Send message |
+| `M-p` / `M-n` | History previous/next |
+
+**Global (work everywhere):**
+
+| Key | Action |
+|-----|--------|
+| `C-c C-c` | Send message |
+| `C-c C-k` | Interrupt current operation |
+| `C-c C-n` | New session |
+| `C-c C-q` | Close session |
+| `C-c C-t` | Open transient menu |
+
+### Requirements
+
+The chat UI requires additional packages:
+- `magit-section` - for collapsible sections
+- `transient` - for keyboard menus
+
+Install them via MELPA or your package manager.
 
 ## File Structure
 
 ```
 sdks/elisp/
-├── claude-cli.el           ; Main entry point and session API
-├── claude-cli-protocol.el  ; JSON/NDJSON protocol handling
-├── claude-cli-process.el   ; CLI process management
-├── claude-cli-events.el    ; Event types and hooks
-├── claude-cli-state.el     ; State machine
-├── claude-cli-turn.el      ; Turn tracking
-├── claude-cli-permission.el; Permission handling
+├── claude-cli.el             ; Main SDK entry point and session API
+├── claude-cli-protocol.el    ; JSON/NDJSON protocol handling
+├── claude-cli-process.el     ; CLI process management
+├── claude-cli-events.el      ; Event types and hooks
+├── claude-cli-state.el       ; State machine
+├── claude-cli-turn.el        ; Turn tracking
+├── claude-cli-permission.el  ; Permission handling
+├── claude-cli-chat.el            ; Chat UI main entry point
+├── claude-cli-chat-buffer.el     ; Buffer management and rendering
+├── claude-cli-chat-sections.el   ; Magit-style collapsible sections
+├── claude-cli-chat-input.el      ; Input area management
+├── claude-cli-chat-faces.el      ; Face definitions for styling
+├── claude-cli-chat-transient.el  ; Transient menu definitions
+├── claude-cli-chat-navigation.el ; Navigation commands
+├── claude-cli-chat-export.el     ; Export functionality
 └── examples/
     ├── claude-cli-basic-example.el
     └── claude-cli-streaming-example.el
