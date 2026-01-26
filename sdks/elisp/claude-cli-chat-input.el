@@ -5,7 +5,11 @@
 ;;; Commentary:
 
 ;; This file manages the input area at the bottom of the Claude Chat buffer.
-;; The input area is editable while the rest of the buffer is read-only.
+;; Uses an eshell-style approach where:
+;; - The conversation grows upward
+;; - Input prompt appears at the bottom
+;; - After sending, input becomes read-only
+;; - After turn completes, new prompt appears
 
 ;;; Code:
 
@@ -20,26 +24,6 @@
 (declare-function claude-cli-chat-send "claude-cli-chat")
 (declare-function claude-cli-chat-menu "claude-cli-chat")
 
-;;; Input Area Keymap
-
-(defvar claude-cli-chat-input-mode-map
-  (let ((map (make-sparse-keymap)))
-    ;; Send message
-    (define-key map (kbd "C-c C-c") #'claude-cli-chat-send)
-    (define-key map (kbd "C-<return>") #'claude-cli-chat-send)
-    (define-key map (kbd "M-<return>") #'claude-cli-chat-send)
-    (define-key map (kbd "<C-return>") #'claude-cli-chat-send)
-    (define-key map (kbd "<M-return>") #'claude-cli-chat-send)
-    ;; History navigation
-    (define-key map (kbd "M-p") #'claude-cli-chat-input--history-previous)
-    (define-key map (kbd "M-n") #'claude-cli-chat-input--history-next)
-    ;; Menu access
-    (define-key map (kbd "C-c C-t") #'claude-cli-chat-menu)
-    ;; Standard text editing keys are inherited
-    map)
-  "Keymap for the input area in `claude-cli-chat-mode'.
-This keymap is active only in the editable input area.")
-
 ;;; Constants
 
 (defconst claude-cli-chat-input--separator-char ?─
@@ -50,82 +34,82 @@ This keymap is active only in the editable input area.")
 
 ;;; Buffer-local Variables
 
-(defvar-local claude-cli-chat-input--overlay nil
-  "Overlay for the input area styling.")
+(defvar-local claude-cli-chat-input--history nil
+  "History of sent messages in this buffer.")
 
-(defvar-local claude-cli-chat-input--placeholder-overlay nil
-  "Overlay for placeholder text when input is empty.")
+(defvar-local claude-cli-chat-input--history-index -1
+  "Current position in history (-1 means not browsing history).")
 
-;;; Setup
+;;; Input Minor Mode
+
+(defvar claude-cli-chat-input-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;; Inherit text-mode bindings for normal editing
+    (set-keymap-parent map text-mode-map)
+    ;; Send message (don't use plain RET - that's for newlines)
+    (define-key map (kbd "C-c C-c") #'claude-cli-chat-send)
+    (define-key map (kbd "C-<return>") #'claude-cli-chat-send)
+    (define-key map (kbd "M-<return>") #'claude-cli-chat-send)
+    (define-key map (kbd "<C-return>") #'claude-cli-chat-send)
+    (define-key map (kbd "<M-return>") #'claude-cli-chat-send)
+    ;; History navigation
+    (define-key map (kbd "M-p") #'claude-cli-chat-input--history-previous)
+    (define-key map (kbd "M-n") #'claude-cli-chat-input--history-next)
+    ;; Menu access
+    (define-key map (kbd "C-c C-t") #'claude-cli-chat-menu)
+    map)
+  "Keymap for `claude-cli-chat-input-mode'.")
+
+(define-minor-mode claude-cli-chat-input-mode
+  "Minor mode for Claude chat input area.
+Provides text editing keybindings and send functionality."
+  :lighter " Input"
+  :keymap claude-cli-chat-input-mode-map)
+
+;;; Setup and Display
 
 (defun claude-cli-chat-input--setup ()
-  "Set up the input area at the end of the buffer."
+  "Set up the initial input area at the end of the buffer."
+  (claude-cli-chat-input--insert-prompt)
+  ;; Enable minor mode
+  (claude-cli-chat-input-mode 1)
+  ;; Set up hooks for input area detection
+  (add-hook 'post-command-hook #'claude-cli-chat-input--maybe-enable-mode nil t))
+
+(defun claude-cli-chat-input--insert-prompt ()
+  "Insert a new prompt at the end of the buffer."
   (let ((inhibit-read-only t))
-    ;; Insert separator
     (goto-char (point-max))
-    (insert "\n")
-    (insert (propertize (make-string claude-cli-chat-input--separator-width
-                                     claude-cli-chat-input--separator-char)
-                        'face 'claude-cli-chat-separator
-                        'read-only t
-                        'front-sticky '(read-only)
-                        'rear-nonsticky t))
-    (insert "\n")
-    ;; Mark input start
+    ;; Insert separator if not at beginning
+    (unless (bobp)
+      (insert "\n")
+      (insert (propertize (make-string claude-cli-chat-input--separator-width
+                                       claude-cli-chat-input--separator-char)
+                          'face 'claude-cli-chat-separator
+                          'read-only t
+                          'front-sticky '(read-only)
+                          'rear-nonsticky t))
+      (insert "\n"))
+    ;; Mark input start (before prompt)
     (setq claude-cli-chat--input-start (point-marker))
     (set-marker-insertion-type claude-cli-chat--input-start nil)
-    ;; Insert prompt indicator
-    (insert (propertize "> " 'face 'claude-cli-chat-input-prompt
+    ;; Insert prompt with text properties (eshell-style)
+    (insert (propertize "> "
+                        'face 'claude-cli-chat-input-prompt
                         'read-only t
                         'front-sticky '(read-only)
-                        'rear-nonsticky t))
-    ;; Create input area overlay for styling and keymap
-    (setq claude-cli-chat-input--overlay
-          (make-overlay (point) (point-max) nil nil t))
-    (overlay-put claude-cli-chat-input--overlay 'face 'claude-cli-chat-input-area)
-    (overlay-put claude-cli-chat-input--overlay 'keymap claude-cli-chat-input-mode-map)
-    (overlay-put claude-cli-chat-input--overlay 'modification-hooks
-                 '(claude-cli-chat-input--extend-overlay))
-    ;; Create placeholder overlay
-    (claude-cli-chat-input--setup-placeholder)
-    ;; Move point to input area
+                        'rear-nonsticky t
+                        'field 'prompt))
+    ;; Position cursor for input
     (goto-char (point-max))))
 
-(defun claude-cli-chat-input--setup-placeholder ()
-  "Set up placeholder text overlay."
-  (setq claude-cli-chat-input--placeholder-overlay
-        (make-overlay (point) (point) nil t nil))
-  (overlay-put claude-cli-chat-input--placeholder-overlay
-               'before-string
-               (propertize "Type your message here..."
-                           'face 'claude-cli-chat-input-placeholder))
-  (overlay-put claude-cli-chat-input--placeholder-overlay 'evaporate t)
-  ;; Hook to hide placeholder when input is non-empty
-  (add-hook 'post-command-hook #'claude-cli-chat-input--update-placeholder nil t))
-
-(defun claude-cli-chat-input--update-placeholder ()
-  "Update placeholder visibility based on input content."
-  (when (and claude-cli-chat-input--placeholder-overlay
-             (overlay-buffer claude-cli-chat-input--placeholder-overlay))
-    (let ((content (claude-cli-chat-input--get-content)))
-      (if (string-empty-p content)
-          ;; Show placeholder
-          (progn
-            (move-overlay claude-cli-chat-input--placeholder-overlay
-                          (claude-cli-chat-input--content-start)
-                          (claude-cli-chat-input--content-start))
-            (overlay-put claude-cli-chat-input--placeholder-overlay
-                         'before-string
-                         (propertize "Type your message here..."
-                                     'face 'claude-cli-chat-input-placeholder)))
-        ;; Hide placeholder
-        (overlay-put claude-cli-chat-input--placeholder-overlay 'before-string nil)))))
-
-(defun claude-cli-chat-input--extend-overlay (overlay after beg end &optional len)
-  "Extend OVERLAY to cover new text when modified.
-AFTER, BEG, END, LEN are standard modification hook arguments."
-  (when (and after (overlay-buffer overlay))
-    (move-overlay overlay (overlay-start overlay) (point-max))))
+(defun claude-cli-chat-input--maybe-enable-mode ()
+  "Enable or disable input mode based on cursor position."
+  (if (claude-cli-chat-input--in-editable-p)
+      (unless claude-cli-chat-input-mode
+        (claude-cli-chat-input-mode 1))
+    (when claude-cli-chat-input-mode
+      (claude-cli-chat-input-mode -1))))
 
 ;;; Content Access
 
@@ -151,20 +135,14 @@ AFTER, BEG, END, LEN are standard modification hook arguments."
   (let ((inhibit-read-only t)
         (start (claude-cli-chat-input--content-start)))
     (when start
-      (delete-region start (point-max))
-      ;; Move overlay
-      (when claude-cli-chat-input--overlay
-        (move-overlay claude-cli-chat-input--overlay start (point-max)))
-      ;; Trigger placeholder update
-      (claude-cli-chat-input--update-placeholder))))
+      (delete-region start (point-max)))))
 
 (defun claude-cli-chat-input--set-content (content)
   "Set the input area content to CONTENT."
   (claude-cli-chat-input--clear)
   (let ((inhibit-read-only t))
     (goto-char (point-max))
-    (insert content)
-    (claude-cli-chat-input--update-placeholder)))
+    (insert content)))
 
 ;;; Navigation
 
@@ -199,13 +177,7 @@ AFTER, BEG, END, LEN are standard modification hook arguments."
   "Get input content with leading/trailing whitespace removed."
   (string-trim (claude-cli-chat-input--get-content)))
 
-;;; History (optional feature)
-
-(defvar-local claude-cli-chat-input--history nil
-  "History of sent messages in this buffer.")
-
-(defvar-local claude-cli-chat-input--history-index -1
-  "Current position in history (-1 means not browsing history).")
+;;; History
 
 (defun claude-cli-chat-input--add-to-history (content)
   "Add CONTENT to input history."

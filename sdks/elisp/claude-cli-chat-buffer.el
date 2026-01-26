@@ -26,6 +26,11 @@
 (declare-function claude-cli-chat-sections--update-tool-result "claude-cli-chat-sections")
 (declare-function claude-cli-chat-sections--insert-error "claude-cli-chat-sections")
 (declare-function claude-cli-chat-input--setup "claude-cli-chat-input")
+(declare-function claude-cli-chat-input--new-prompt "claude-cli-chat-input")
+(declare-function claude-cli-chat-question--display "claude-cli-chat-question")
+(declare-function claude-cli-chat-question--pending-p "claude-cli-chat-question")
+(declare-function claude-cli-chat-question--submit "claude-cli-chat-question")
+(declare-function claude-cli-send-tool-result "claude-cli")
 
 ;; Buffer-local variable declarations (defined in claude-cli-chat.el)
 (defvar claude-cli-chat--session)
@@ -71,47 +76,48 @@
 ;;; Turn Insertion
 
 (defun claude-cli-chat-buffer--insert-user-turn (turn-number content)
-  "Insert a new turn with TURN-NUMBER and user CONTENT."
+  "Insert user CONTENT, ready to stream response.
+Minimal display: just user message, then response streams in."
   (claude-cli-chat-buffer--with-writable
     (save-excursion
       (goto-char claude-cli-chat--conversation-end)
-      ;; Insert turn separator if not first turn
+      ;; Blank line between turns (but not before first)
       (when (> turn-number 1)
         (insert "\n"))
-      ;; Insert turn heading
-      (let ((start (point)))
-        (insert (propertize (format "─── Turn %d " turn-number)
-                            'face 'claude-cli-chat-turn-heading))
-        (insert (propertize (make-string (max 0 (- 60 (- (point) start))) ?─)
-                            'face 'claude-cli-chat-separator))
-        (insert "\n\n"))
-      ;; Insert user message
-      (insert (propertize "You" 'face 'claude-cli-chat-user-label))
-      (insert "\n")
+      ;; Insert user message with styling
       (let ((msg-start (point)))
         (insert content)
-        (insert "\n\n")
-        ;; Apply user background
         (put-text-property msg-start (point) 'face 'claude-cli-chat-user-content))
-      ;; Prepare for assistant response
-      (insert (propertize "Claude" 'face 'claude-cli-chat-assistant-label))
       (insert "\n")
-      ;; Set streaming marker for response insertion
+      ;; Start response inline - set marker here, response streams in at end
+      ;; The 🔄 spinner will be at the end of the response as it streams
       (setq claude-cli-chat--streaming-marker (point-marker))
       (set-marker-insertion-type claude-cli-chat--streaming-marker t)
+      ;; Add initial spinner
+      (insert (propertize "🔄" 'claude-cli-chat-progress-indicator t
+                          'face 'claude-cli-chat-assistant-content))
       ;; Update conversation end
       (set-marker claude-cli-chat--conversation-end (point)))))
 
 ;;; Event Handlers
 
 (defun claude-cli-chat-buffer--handle-text (event)
-  "Handle streaming text EVENT."
+  "Handle streaming text EVENT.
+Insert text before spinner, keeping spinner at the end."
   (when claude-cli-chat--streaming-marker
     (let ((text (claude-cli-text-event-text event)))
       (claude-cli-chat-buffer--with-writable
         (save-excursion
-          (goto-char claude-cli-chat--streaming-marker)
+          ;; Find the spinner (last character before streaming marker)
+          (goto-char (- claude-cli-chat--streaming-marker 1))
+          ;; Delete the spinner temporarily
+          (when (looking-at "🔄")
+            (delete-char 1))
+          ;; Insert the new text
           (insert (propertize text 'face 'claude-cli-chat-assistant-content))
+          ;; Re-insert spinner at the end
+          (insert (propertize "🔄" 'claude-cli-chat-progress-indicator t
+                              'face 'claude-cli-chat-assistant-content))
           ;; Update current turn tracking
           (when claude-cli-chat--current-turn
             (plist-put claude-cli-chat--current-turn :assistant-content
@@ -183,15 +189,19 @@
          (tool-name (claude-cli-tool-complete-event-name event))
          (input (claude-cli-tool-complete-event-input event))
          (marker (gethash tool-id claude-cli-chat--tool-markers)))
-    (when marker
-      (claude-cli-chat-buffer--with-writable
-        (save-excursion
-          (goto-char marker)
-          ;; Insert formatted input
-          (insert (propertize "    Input: " 'face 'claude-cli-chat-tool-sublabel))
-          (insert (propertize (claude-cli-chat-buffer--format-json input)
-                              'face 'claude-cli-chat-tool-json))
-          (insert "\n"))))))
+    ;; Check if this is AskUserQuestion - needs special handling
+    (if (string= tool-name "AskUserQuestion")
+        (claude-cli-chat-buffer--handle-ask-user-question tool-id input)
+      ;; Regular tool - just show input
+      (when marker
+        (claude-cli-chat-buffer--with-writable
+          (save-excursion
+            (goto-char marker)
+            ;; Insert formatted input
+            (insert (propertize "    Input: " 'face 'claude-cli-chat-tool-sublabel))
+            (insert (propertize (claude-cli-chat-buffer--format-json input)
+                                'face 'claude-cli-chat-tool-json))
+            (insert "\n")))))))
 
 (defun claude-cli-chat-buffer--handle-tool-result (event)
   "Handle tool result EVENT."
@@ -242,10 +252,14 @@
                (or (claude-cli-turn-usage-output-tokens usage) 0))
       (cl-incf claude-cli-chat--total-cost
                (or (claude-cli-turn-usage-cost-usd usage) 0.0)))
-    ;; Finalize current turn
+    ;; Finalize current turn - remove spinner and add newline
     (claude-cli-chat-buffer--with-writable
       (save-excursion
         (goto-char claude-cli-chat--streaming-marker)
+        ;; Remove the spinner at the end
+        (backward-char 1)
+        (when (looking-at "🔄")
+          (delete-char 1))
         (insert "\n")))
     ;; Save to history
     (when claude-cli-chat--current-turn
@@ -257,6 +271,9 @@
           claude-cli-chat--thinking-marker nil
           claude-cli-chat--thinking-started nil)
     (clrhash claude-cli-chat--tool-markers)
+    ;; Insert new prompt for next message
+    (require 'claude-cli-chat-input)
+    (claude-cli-chat-input--insert-prompt)
     ;; Update mode line
     (force-mode-line-update)))
 
@@ -290,6 +307,68 @@
   (force-mode-line-update)
   (message "Session ready (model: %s)"
            (claude-cli-ready-event-model event)))
+
+;;; AskUserQuestion Handling
+
+(defun claude-cli-chat-buffer--handle-ask-user-question (tool-use-id input)
+  "Handle AskUserQuestion tool with TOOL-USE-ID and INPUT."
+  (let ((questions (or (plist-get input :questions)
+                       (cdr (assq 'questions input)))))
+    (when questions
+      ;; Display question in buffer
+      (claude-cli-chat-buffer--with-writable
+        (save-excursion
+          (goto-char claude-cli-chat--streaming-marker)
+          (insert "\n")
+          (insert (propertize "❓ Claude has a question:\n\n"
+                              'face '(:inherit font-lock-warning-face :weight bold)))))
+      ;; Build prompt with options
+      (let ((prompt-parts nil)
+            (options-alist nil)
+            (option-index 1))
+        (dolist (q questions)
+          (let ((question-text (or (plist-get q :question)
+                                   (cdr (assq 'question q))))
+                (options (or (plist-get q :options)
+                             (cdr (assq 'options q)))))
+            ;; Display question in buffer
+            (claude-cli-chat-buffer--with-writable
+              (save-excursion
+                (goto-char claude-cli-chat--streaming-marker)
+                (insert (propertize question-text 'face '(:weight bold)))
+                (insert "\n\n")))
+            ;; Build options
+            (when options
+              (dolist (opt (append options nil))
+                (claude-cli-chat-buffer--with-writable
+                  (save-excursion
+                    (goto-char claude-cli-chat--streaming-marker)
+                    (insert (propertize (format "  [%d] " option-index)
+                                        'face 'font-lock-keyword-face))
+                    (insert (propertize (format "%s\n" opt)
+                                        'face 'font-lock-string-face))))
+                (push (cons (number-to-string option-index) opt) options-alist)
+                (cl-incf option-index)))
+            (push question-text prompt-parts)))
+        ;; Prompt user
+        (let* ((prompt (format "%s\nEnter number or type response: "
+                               (string-join (nreverse prompt-parts) "\n")))
+               (response (read-string prompt))
+               (answer (or (cdr (assoc response options-alist))
+                           response)))
+          ;; Show answer in buffer
+          (claude-cli-chat-buffer--with-writable
+            (save-excursion
+              (goto-char claude-cli-chat--streaming-marker)
+              (insert "\n")
+              (insert (propertize "Your answer: " 'face 'font-lock-comment-face))
+              (insert (propertize answer 'face 'font-lock-string-face))
+              (insert "\n\n")))
+          ;; Send tool result
+          (claude-cli-send-tool-result
+           claude-cli-chat--session
+           tool-use-id
+           answer))))))
 
 ;;; Formatting Helpers
 

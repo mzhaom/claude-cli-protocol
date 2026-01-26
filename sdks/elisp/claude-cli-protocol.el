@@ -149,6 +149,18 @@ Signals `claude-cli-protocol-error' on parse failure."
   `(:type "user"
     :message (:role "user" :content ,content)))
 
+(defun claude-cli-protocol-tool-result-message (tool-use-id content &optional is-error)
+  "Create a user message containing a tool result.
+TOOL-USE-ID is the ID of the tool use this result responds to.
+CONTENT is the result content (string or structured data).
+IS-ERROR if non-nil marks this as an error result."
+  `(:type "user"
+    :message (:role "user"
+              :content [(:type "tool_result"
+                         :tool_use_id ,tool-use-id
+                         :content ,content
+                         ,@(when is-error '(:is_error t)))])))
+
 (defun claude-cli-protocol-control-request (request-id request)
   "Create a control request wrapper with REQUEST-ID and REQUEST body."
   `(:type "control_request"
@@ -169,6 +181,12 @@ MODE should be a symbol: default, accept-edits, plan, or bypass."
 (defun claude-cli-protocol-interrupt-request ()
   "Create interrupt request body."
   '(:subtype "interrupt"))
+
+(defun claude-cli-protocol-set-model-request (model)
+  "Create set_model request body for MODEL.
+MODEL should be a string like \"haiku\", \"sonnet\", \"opus\" or full model ID."
+  `(:subtype "set_model"
+    :model ,model))
 
 (defun claude-cli-protocol-permission-response (request-id response)
   "Create a control response wrapper with REQUEST-ID and RESPONSE body."

@@ -299,6 +299,31 @@ Otherwise, updates the configuration for next start."
     (claude-cli-protocol--generate-request-id)
     (claude-cli-protocol-interrupt-request))))
 
+;;;###autoload
+(defun claude-cli-set-model (session model)
+  "Set MODEL for SESSION.
+MODEL should be \"haiku\", \"sonnet\", \"opus\" or a full model ID.
+Takes effect immediately for subsequent messages."
+  (claude-cli--check-started session)
+  (claude-cli-process-send
+   (claude-cli-session-process session)
+   (claude-cli-protocol-control-request
+    (claude-cli-protocol--generate-request-id)
+    (claude-cli-protocol-set-model-request model))))
+
+;;;###autoload
+(defun claude-cli-send-tool-result (session tool-use-id content &optional is-error)
+  "Send a tool result to SESSION.
+TOOL-USE-ID is the ID of the tool use being responded to.
+CONTENT is the result content (string).
+IS-ERROR if non-nil marks this as an error result.
+
+This is used for tools like AskUserQuestion that require SDK-side handling."
+  (claude-cli--check-started session)
+  (claude-cli-process-send
+   (claude-cli-session-process session)
+   (claude-cli-protocol-tool-result-message tool-use-id content is-error)))
+
 ;;; Query methods
 
 ;;;###autoload
