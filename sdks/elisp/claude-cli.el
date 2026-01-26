@@ -280,13 +280,16 @@ MODE should be one of: default, accept-edits, plan, bypass.
 If session is running, sends a control request.
 Otherwise, updates the configuration for next start."
   (if (claude-cli-session-started session)
-      ;; Send control request to running session
-      (claude-cli-process-send
-       (claude-cli-session-process session)
-       (claude-cli-protocol-control-request
-        (claude-cli-protocol--generate-request-id)
-        (claude-cli-protocol-set-permission-mode-request mode)))
-    ;; Just update config
+      ;; Session is running - update local state immediately for UI feedback
+      (progn
+        (setf (claude-cli-session-info-permission-mode (claude-cli-session-info session)) mode)
+        ;; Send control request to CLI
+        (claude-cli-process-send
+         (claude-cli-session-process session)
+         (claude-cli-protocol-control-request
+          (claude-cli-protocol--generate-request-id)
+          (claude-cli-protocol-set-permission-mode-request mode))))
+    ;; Session not started - just update config for next start
     (plist-put (claude-cli-session-config session) :permission-mode mode)))
 
 ;;;###autoload
@@ -305,6 +308,9 @@ Otherwise, updates the configuration for next start."
 MODEL should be \"haiku\", \"sonnet\", \"opus\" or a full model ID.
 Takes effect immediately for subsequent messages."
   (claude-cli--check-started session)
+  ;; Update local state immediately for UI feedback
+  (setf (claude-cli-session-info-model (claude-cli-session-info session)) model)
+  ;; Send control request to CLI
   (claude-cli-process-send
    (claude-cli-session-process session)
    (claude-cli-protocol-control-request
@@ -598,10 +604,12 @@ SESSION-DATA is a plist with :session key."
   (let* ((request-id (plist-get msg :request_id))
          (request (plist-get msg :request))
          (subtype (plist-get request :subtype)))
-    (when (equal subtype "can_use_tool")
-      (let* ((handler (plist-get (claude-cli-session-config session) :permission-handler))
-             (response (claude-cli-permission-handle-request request-id request handler)))
-        (claude-cli-process-send (claude-cli-session-process session) response)))))
+    (pcase subtype
+      ("can_use_tool"
+       (let* ((handler (plist-get (claude-cli-session-config session) :permission-handler))
+              (response (claude-cli-permission-handle-request request-id request handler)))
+         (claude-cli-process-send (claude-cli-session-process session) response)))
+      (_ nil))))
 
 ;;; Internal: Completion notification
 
