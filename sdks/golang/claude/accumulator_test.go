@@ -530,3 +530,76 @@ func TestStreamAccumulator_ToolWithTimestamp(t *testing.T) {
 		t.Errorf("timestamp out of expected range: %v", toolStartEvents[0].Timestamp)
 	}
 }
+
+func TestStreamAccumulator_ToolWithEmptyInput(t *testing.T) {
+	// Test that tools with no input parameters still emit ToolCompleteEvent
+	// This covers the fix for tools that have no input_json_delta events
+	s := testSession()
+	acc := newStreamAccumulator(s)
+	s.turnManager.StartTurn("Run a simple command")
+
+	// Simulate message_start
+	acc.HandleEvent(protocol.StreamEvent{
+		SessionID: "test",
+		Event:     json.RawMessage(`{"type":"message_start","message":{"model":"haiku","id":"msg_1","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}}`),
+	})
+
+	// Start tool_use block - note: no input_json_delta events will follow
+	acc.HandleEvent(protocol.StreamEvent{
+		SessionID: "test",
+		Event:     json.RawMessage(`{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_empty","name":"NoParamTool","input":{}}}`),
+	})
+
+	// Collect and verify ToolStartEvent
+	events := collectEvents(s)
+	toolStartEvents := filterEvents[ToolStartEvent](events)
+	if len(toolStartEvents) != 1 {
+		t.Fatalf("expected 1 ToolStartEvent, got %d", len(toolStartEvents))
+	}
+	if toolStartEvents[0].ID != "toolu_empty" {
+		t.Errorf("expected tool ID 'toolu_empty', got %q", toolStartEvents[0].ID)
+	}
+	if toolStartEvents[0].Name != "NoParamTool" {
+		t.Errorf("expected tool name 'NoParamTool', got %q", toolStartEvents[0].Name)
+	}
+
+	// Directly send content_block_stop WITHOUT any input_json_delta events
+	// This simulates a tool that takes no parameters
+	acc.HandleEvent(protocol.StreamEvent{
+		SessionID: "test",
+		Event:     json.RawMessage(`{"type":"content_block_stop","index":0}`),
+	})
+
+	// Collect and verify ToolCompleteEvent
+	events = collectEvents(s)
+	completeEvents := filterEvents[ToolCompleteEvent](events)
+	if len(completeEvents) != 1 {
+		t.Fatalf("expected 1 ToolCompleteEvent for empty input tool, got %d", len(completeEvents))
+	}
+	if completeEvents[0].ID != "toolu_empty" {
+		t.Errorf("expected tool ID 'toolu_empty', got %q", completeEvents[0].ID)
+	}
+	if completeEvents[0].Name != "NoParamTool" {
+		t.Errorf("expected tool name 'NoParamTool', got %q", completeEvents[0].Name)
+	}
+
+	// Input should be an empty map, not nil
+	if completeEvents[0].Input == nil {
+		t.Error("expected Input to be empty map, got nil")
+	}
+	if len(completeEvents[0].Input) != 0 {
+		t.Errorf("expected empty input map, got %d entries: %v", len(completeEvents[0].Input), completeEvents[0].Input)
+	}
+
+	// Verify tool was registered in turn with empty input
+	tool := s.turnManager.GetTool("toolu_empty")
+	if tool == nil {
+		t.Fatal("expected tool to be registered in turn")
+	}
+	if tool.Input == nil {
+		t.Error("expected tool.Input to be empty map, got nil")
+	}
+	if len(tool.Input) != 0 {
+		t.Errorf("expected empty tool input, got %v", tool.Input)
+	}
+}
