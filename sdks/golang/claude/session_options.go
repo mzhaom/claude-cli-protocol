@@ -25,6 +25,10 @@ type SessionConfig struct {
 	// PermissionMode controls tool execution approval.
 	PermissionMode PermissionMode
 
+	// DangerouslySkipPermissions skips all permission prompts (use with caution).
+	// This is typically used with PermissionModePlan to enable plan mode without prompts.
+	DangerouslySkipPermissions bool
+
 	// CLIPath is the path to the Claude CLI binary (uses "claude" in PATH if empty).
 	CLIPath string
 
@@ -45,6 +49,12 @@ type SessionConfig struct {
 
 	// StderrHandler is an optional handler for CLI stderr output.
 	StderrHandler func([]byte)
+
+	// MCPConfig configures MCP servers for custom tools.
+	MCPConfig *MCPConfig
+
+	// SystemPrompt overrides the default system prompt.
+	SystemPrompt string
 }
 
 // SessionOption is a functional option for configuring a Session.
@@ -85,6 +95,14 @@ func WithDisablePlugins() SessionOption {
 	}
 }
 
+// WithDangerouslySkipPermissions skips all permission prompts.
+// This is typically used with PermissionModePlan to enable plan mode without prompts.
+func WithDangerouslySkipPermissions() SessionOption {
+	return func(c *SessionConfig) {
+		c.DangerouslySkipPermissions = true
+	}
+}
+
 // WithRecording enables session recording.
 func WithRecording(dir string) SessionOption {
 	return func(c *SessionConfig) {
@@ -113,6 +131,20 @@ func WithEventBufferSize(size int) SessionOption {
 func WithStderrHandler(h func([]byte)) SessionOption {
 	return func(c *SessionConfig) {
 		c.StderrHandler = h
+	}
+}
+
+// WithMCPConfig sets the MCP server configuration for custom tools.
+func WithMCPConfig(cfg *MCPConfig) SessionOption {
+	return func(c *SessionConfig) {
+		c.MCPConfig = cfg
+	}
+}
+
+// WithSystemPrompt sets a custom system prompt.
+func WithSystemPrompt(prompt string) SessionOption {
+	return func(c *SessionConfig) {
+		c.SystemPrompt = prompt
 	}
 }
 

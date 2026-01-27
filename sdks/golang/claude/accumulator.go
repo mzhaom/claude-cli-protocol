@@ -185,24 +185,32 @@ func (sa *streamAccumulator) handleContentBlockStop(e protocol.ContentBlockStopE
 	}
 
 	// For tool_use blocks, parse the complete input and emit tool complete
-	if state.blockType == "tool_use" && state.partialJSON != "" {
+	if state.blockType == "tool_use" {
 		var input map[string]interface{}
-		if err := json.Unmarshal([]byte(state.partialJSON), &input); err == nil {
-			// Update tool state
-			tool := sa.session.turnManager.GetTool(state.toolID)
-			if tool != nil {
-				tool.Input = input
-			}
 
-			// Emit tool complete event
-			sa.session.emit(ToolCompleteEvent{
-				TurnNumber: sa.session.turnManager.CurrentTurnNumber(),
-				ID:         state.toolID,
-				Name:       state.toolName,
-				Input:      input,
-				Timestamp:  time.Now(),
-			})
+		// Parse JSON if present, otherwise use empty map
+		if state.partialJSON != "" {
+			if err := json.Unmarshal([]byte(state.partialJSON), &input); err != nil {
+				input = make(map[string]interface{})
+			}
+		} else {
+			input = make(map[string]interface{})
 		}
+
+		// Update tool state
+		tool := sa.session.turnManager.GetTool(state.toolID)
+		if tool != nil {
+			tool.Input = input
+		}
+
+		// Emit tool complete event
+		sa.session.emit(ToolCompleteEvent{
+			TurnNumber: sa.session.turnManager.CurrentTurnNumber(),
+			ID:         state.toolID,
+			Name:       state.toolName,
+			Input:      input,
+			Timestamp:  time.Now(),
+		})
 	}
 
 	// Clean up block state

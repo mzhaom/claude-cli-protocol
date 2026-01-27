@@ -55,6 +55,15 @@ bun.lockb
 bin/
 vendor/
 
+# Go binaries
+yoloplanner/yoloplanner
+multiagent/swarm
+experiments/plan_mode_analysis/plan_mode_analysis
+
+# Session recordings
+.planner-sessions/
+.claude-sessions/
+
 # Rust
 target/
 

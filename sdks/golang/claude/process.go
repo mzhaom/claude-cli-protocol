@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os/exec"
 	"sync"
@@ -56,8 +57,26 @@ func (pm *processManager) Start(ctx context.Context) error {
 		args = append(args, "--permission-mode", string(pm.config.PermissionMode))
 	}
 
+	if pm.config.DangerouslySkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
 	if pm.config.DisablePlugins {
 		args = append(args, "--plugin-dir", "/dev/null")
+	}
+
+	// Add MCP configuration if provided
+	if pm.config.MCPConfig != nil && len(pm.config.MCPConfig.MCPServers) > 0 {
+		mcpJSON, err := json.Marshal(pm.config.MCPConfig)
+		if err != nil {
+			return &ProcessError{Message: "failed to marshal MCP config", Cause: err}
+		}
+		args = append(args, "--mcp-config", string(mcpJSON))
+	}
+
+	// Add system prompt if provided
+	if pm.config.SystemPrompt != "" {
+		args = append(args, "--system-prompt", pm.config.SystemPrompt)
 	}
 
 	// Always include partial messages for tool progress tracking
