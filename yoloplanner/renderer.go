@@ -26,8 +26,9 @@ const (
 
 // Renderer handles terminal output with ANSI colors.
 type Renderer struct {
-	mu  sync.Mutex
-	out io.Writer
+	mu      sync.Mutex
+	out     io.Writer
+	verbose bool // When false, only error tool results are shown
 
 	// State tracking
 	inToolOutput bool
@@ -35,8 +36,9 @@ type Renderer struct {
 }
 
 // NewRenderer creates a new renderer writing to the given output.
-func NewRenderer(out io.Writer) *Renderer {
-	return &Renderer{out: out}
+// If verbose is false, only error tool results are displayed.
+func NewRenderer(out io.Writer, verbose bool) *Renderer {
+	return &Renderer{out: out, verbose: verbose}
 }
 
 // Status prints a status message.
@@ -113,9 +115,15 @@ func (r *Renderer) ToolComplete(name string, input map[string]interface{}) {
 }
 
 // ToolResult prints the result of a tool execution.
+// Only errors are shown unless verbose mode is enabled.
 func (r *Renderer) ToolResult(content interface{}, isError bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Only show non-error results in verbose mode
+	if !isError && !r.verbose {
+		return
+	}
 
 	// Format content
 	contentStr := r.formatContent(content)
@@ -181,6 +189,37 @@ func (r *Renderer) QuestionWithOptions(question, header string, options []Questi
 			} else {
 				fmt.Fprintf(r.out, "  %s%d.%s %s\n", colorCyan, i+1, colorReset, opt.Label)
 			}
+		}
+	}
+}
+
+// QuestionAutoAnswer renders a question with all options, highlighting the auto-selected answer.
+// Shows full context for transparency even in simple mode.
+func (r *Renderer) QuestionAutoAnswer(question, header string, options []QuestionOption, selectedIdx int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.closeToolOutput()
+
+	// Print header if present
+	if header != "" {
+		fmt.Fprintf(r.out, "\n%s[%s]%s %s\n", colorMagenta, header, colorReset, question)
+	} else {
+		fmt.Fprintf(r.out, "\n%s[Question]%s %s\n", colorMagenta, colorReset, question)
+	}
+
+	// Show all options, highlight the selected one
+	for i, opt := range options {
+		if i == selectedIdx {
+			// Highlight selected option in green
+			fmt.Fprintf(r.out, "  %s→ %d. %s%s", colorGreen, i+1, opt.Label, colorReset)
+			fmt.Fprintf(r.out, " %s(auto-selected)%s\n", colorGray, colorReset)
+		} else {
+			// Show other options dimmed
+			fmt.Fprintf(r.out, "  %s  %d. %s%s\n", colorGray, i+1, opt.Label, colorReset)
+		}
+		if opt.Description != "" {
+			fmt.Fprintf(r.out, "  %s     %s%s\n", colorGray, opt.Description, colorReset)
 		}
 	}
 }

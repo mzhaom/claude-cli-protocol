@@ -30,6 +30,8 @@ func main() {
 	workDir := flag.String("dir", "", "Working directory (defaults to current directory)")
 	recordDir := flag.String("record", ".planner-sessions", "Directory for session recordings")
 	systemPrompt := flag.String("system", "", "Custom system prompt")
+	verbose := flag.Bool("verbose", false, "Show detailed tool results (errors are always shown)")
+	simple := flag.Bool("simple", false, "Auto-answer questions with first option and export plan on completion")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <prompt>\n\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "A simple wrapper over claude-cli for planner mode.")
@@ -69,6 +71,9 @@ func main() {
 		WorkDir:      *workDir,
 		RecordingDir: *recordDir,
 		SystemPrompt: *systemPrompt,
+		Verbose:      *verbose,
+		Simple:       *simple,
+		Prompt:       prompt,
 	}
 
 	// Create planner wrapper

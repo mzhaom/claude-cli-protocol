@@ -1,4 +1,27 @@
 // Package yoloplanner provides a simple wrapper over claude-cli for planner mode.
+//
+// # Permission Mode and Setup
+//
+// This package demonstrates a specific permission handling approach:
+//
+//  1. Start with PermissionModeDefault - The CLI starts without --permission-mode plan
+//     or --dangerously-skip-permissions flags, allowing fine-grained permission control.
+//
+//  2. Use AllowAllPermissionHandler - Instead of --dangerously-skip-permissions, we
+//     register a permission handler that auto-approves all tool execution requests.
+//     This gives us programmatic control over permissions (could be extended to
+//     selectively approve/deny based on tool name, input, etc.).
+//
+//  3. Switch to plan mode via control message - After the session starts, we send a
+//     set_permission_mode control request to switch to plan mode. This approach was
+//     validated in experiments/plan_mode_analysis/ANALYSIS.md (Experiment C).
+//
+// # Limitations
+//
+//   - The AllowAllPermissionHandler approves everything - for production use, you may
+//     want a more selective handler that reviews dangerous operations.
+//   - Control message responses are not currently awaited - we fire-and-forget the
+//     mode switch. The CLI processes it before the first user message.
 package yoloplanner
 
 import (
@@ -7,10 +30,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
+
+// readLineWithContext reads a line from stdin with context cancellation support.
+func (p *PlannerWrapper) readLineWithContext(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case line := <-p.inputCh:
+		return line, nil
+	}
+}
 
 // Config holds planner configuration.
 type Config struct {
@@ -25,6 +57,16 @@ type Config struct {
 
 	// SystemPrompt overrides the default system prompt.
 	SystemPrompt string
+
+	// Verbose enables detailed tool result output. When false, only errors are shown.
+	Verbose bool
+
+	// Simple enables non-interactive mode: auto-answers questions with first option
+	// and exports plan to markdown on completion.
+	Simple bool
+
+	// Prompt is the initial prompt, used for generating output filenames in simple mode.
+	Prompt string
 }
 
 // PlannerWrapper wraps a claude.Session with planner-specific logic.
@@ -34,11 +76,14 @@ type PlannerWrapper struct {
 	reader   *bufio.Reader
 	config   Config
 
-	// Accumulated plan text
-	planText strings.Builder
+	// Path to the plan file written by Claude (detected from Write tool calls)
+	planFilePath string
 
 	// State tracking
 	waitingForUserInput bool // True when waiting for AskUserQuestion or ExitPlanMode response
+
+	// Channel for context-cancelable stdin reads
+	inputCh chan string
 }
 
 // NewPlannerWrapper creates a new planner wrapper with the given configuration.
@@ -53,17 +98,29 @@ func NewPlannerWrapper(config Config) *PlannerWrapper {
 
 	return &PlannerWrapper{
 		config:   config,
-		renderer: NewRenderer(os.Stdout),
+		renderer: NewRenderer(os.Stdout, config.Verbose),
 		reader:   bufio.NewReader(os.Stdin),
+		inputCh:  make(chan string),
 	}
 }
 
 // Start initializes and starts the underlying claude session.
+//
+// The session is configured with:
+//   - PermissionModeDefault: Start without plan mode flag, allowing control message switch
+//   - AllowAllPermissionHandler: Auto-approve all tool executions (replaces --dangerously-skip-permissions)
+//   - Recording enabled: All messages are recorded for debugging/replay
+//
+// After starting, we switch to plan mode via a control message. This approach
+// (vs starting directly with --permission-mode plan) demonstrates dynamic
+// permission mode changes through the protocol.
 func (p *PlannerWrapper) Start(ctx context.Context) error {
 	opts := []claude.SessionOption{
 		claude.WithModel(p.config.Model),
-		claude.WithPermissionMode(claude.PermissionModePlan),
-		claude.WithDangerouslySkipPermissions(),
+		// Start in default mode - we'll switch to plan mode via control message
+		claude.WithPermissionMode(claude.PermissionModeDefault),
+		// Auto-approve all permissions instead of using --dangerously-skip-permissions
+		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
 		claude.WithRecording(p.config.RecordingDir),
 	}
 
@@ -75,11 +132,30 @@ func (p *PlannerWrapper) Start(ctx context.Context) error {
 		opts = append(opts, claude.WithSystemPrompt(p.config.SystemPrompt))
 	}
 
-	// Print CLI flags that will be used
-	fmt.Fprintf(os.Stderr, "Starting claude with flags: --print --input-format stream-json --output-format stream-json --verbose --model %s --permission-mode plan --dangerously-skip-permissions --include-partial-messages\n", p.config.Model)
-
 	p.session = claude.NewSession(opts...)
-	return p.session.Start(ctx)
+
+	// Print CLI flags that will be used
+	if args, err := p.session.CLIArgs(); err == nil {
+		fmt.Fprintf(os.Stderr, "Starting claude with flags: %s\n", strings.Join(args, " "))
+	}
+
+	if err := p.session.Start(ctx); err != nil {
+		return err
+	}
+
+	// Start persistent stdin reader goroutine
+	go func() {
+		for {
+			line, err := p.reader.ReadString('\n')
+			if err != nil {
+				return // EOF or error, stop reading
+			}
+			p.inputCh <- strings.TrimSpace(line)
+		}
+	}()
+
+	// Switch to plan mode via control message (per experiments/plan_mode_analysis/ANALYSIS.md)
+	return p.session.SetPermissionMode(ctx, claude.PermissionModePlan)
 }
 
 // Stop gracefully shuts down the session.
@@ -97,17 +173,23 @@ func (p *PlannerWrapper) Run(ctx context.Context, prompt string) error {
 		return fmt.Errorf("failed to send initial prompt: %w", err)
 	}
 
-	for event := range p.session.Events() {
-		done, err := p.handleEvent(ctx, event)
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event, ok := <-p.session.Events():
+			if !ok {
+				return nil
+			}
+			done, err := p.handleEvent(ctx, event)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
 		}
 	}
-
-	return nil
 }
 
 // handleEvent processes a single event and returns (done, error).
@@ -117,7 +199,6 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 		p.renderer.Status(fmt.Sprintf("Session started: %s (model: %s)", e.Info.SessionID, e.Info.Model))
 
 	case claude.TextEvent:
-		p.planText.WriteString(e.Text)
 		p.renderer.Text(e.Text)
 
 	case claude.ThinkingEvent:
@@ -132,6 +213,9 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 
 	case claude.ToolCompleteEvent:
 		p.renderer.ToolComplete(e.Name, e.Input)
+
+		// Track plan file writes
+		p.trackPlanFileWrite(e.Name, e.Input)
 
 		// Handle special interactive tools
 		if e.Name == "AskUserQuestion" {
@@ -190,14 +274,21 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[st
 		// Parse options - can be strings or objects with label/description
 		options := parseQuestionOptions(optionsRaw)
 
+		// In simple mode, auto-select first option but show full question
+		if p.config.Simple && len(options) > 0 {
+			response := options[0].Label
+			p.renderer.QuestionAutoAnswer(question, header, options, 0)
+			responses = append(responses, response)
+			continue
+		}
+
 		p.renderer.QuestionWithOptions(question, header, options)
 
 		fmt.Printf("\nYour answer: ")
-		response, err := p.reader.ReadString('\n')
+		response, err := p.readLineWithContext(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to read user input: %w", err)
 		}
-		response = strings.TrimSpace(response)
 
 		// Handle numeric selection
 		if len(options) > 0 {
@@ -240,6 +331,12 @@ func parseQuestionOptions(optionsRaw []interface{}) []QuestionOption {
 func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[string]interface{}) (bool, error) {
 	p.renderer.PlanComplete(input)
 
+	// In simple mode, auto-export and exit
+	if p.config.Simple {
+		filename := p.generatePlanFilename()
+		return p.exportPlanAndExit(ctx, filename)
+	}
+
 	fmt.Println("\n" + strings.Repeat("─", 60))
 	fmt.Println("What would you like to do?")
 	fmt.Println("  1. Execute the plan")
@@ -248,11 +345,10 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 	fmt.Println()
 	fmt.Print("Enter choice (1-3) or feedback: ")
 
-	choice, err := p.reader.ReadString('\n')
+	choice, err := p.readLineWithContext(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to read user choice: %w", err)
 	}
-	choice = strings.TrimSpace(choice)
 
 	switch choice {
 	case "1":
@@ -263,22 +359,16 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 
 	case "2":
 		// Export to markdown
-		filename := fmt.Sprintf("plan-%d.md", time.Now().Unix())
-		content := p.planText.String()
-		if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
-			return false, fmt.Errorf("failed to write plan file: %w", err)
-		}
-		fmt.Printf("\n✓ Plan exported to %s\n", filename)
-		return true, nil
+		filename := p.generatePlanFilename()
+		return p.exportPlanAndExit(ctx, filename)
 
 	case "3":
 		// Continue refining - prompt for optional feedback
 		fmt.Print("Enter feedback (or press Enter to continue): ")
-		feedback, err := p.reader.ReadString('\n')
+		feedback, err := p.readLineWithContext(ctx)
 		if err != nil {
 			return false, fmt.Errorf("failed to read feedback: %w", err)
 		}
-		feedback = strings.TrimSpace(feedback)
 
 		msg := "Please continue refining the plan."
 		if feedback != "" {
@@ -336,7 +426,82 @@ func (p *PlannerWrapper) RecordingPath() string {
 	return ""
 }
 
-// PlanText returns the accumulated plan text.
-func (p *PlannerWrapper) PlanText() string {
-	return p.planText.String()
+// trackPlanFileWrite detects when Claude writes to a plan file in .claude/plans/.
+func (p *PlannerWrapper) trackPlanFileWrite(toolName string, input map[string]interface{}) {
+	if toolName != "Write" {
+		return
+	}
+	filePath, ok := input["file_path"].(string)
+	if !ok {
+		return
+	}
+	if strings.Contains(filePath, ".claude/plans/") && strings.HasSuffix(filePath, ".md") {
+		p.planFilePath = filePath
+	}
+}
+
+// exportPlanAndExit exports the plan to the given filename and returns done=true.
+// If no plan file was detected, it asks Claude to write the plan first.
+// Returns (done, error) where done=true means the session should end.
+func (p *PlannerWrapper) exportPlanAndExit(ctx context.Context, filename string) (bool, error) {
+	if p.planFilePath == "" {
+		// No plan file detected - ask Claude to write it
+		p.renderer.Status("No plan file detected, requesting export...")
+		_, err := p.session.SendMessage(ctx, fmt.Sprintf("Please write your complete plan to %s", filename))
+		return false, err
+	}
+
+	// Read and export the actual plan file written by Claude
+	if err := p.exportPlanToFile(filename); err != nil {
+		return false, err
+	}
+	fmt.Printf("\n✓ Plan exported to %s\n", filename)
+	return true, nil
+}
+
+// exportPlanToFile copies the plan file to the specified destination.
+func (p *PlannerWrapper) exportPlanToFile(destPath string) error {
+	if p.planFilePath == "" {
+		return fmt.Errorf("no plan file path set")
+	}
+	data, err := os.ReadFile(p.planFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read plan file %s: %w", p.planFilePath, err)
+	}
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write export file %s: %w", destPath, err)
+	}
+	return nil
+}
+
+// PlanFilePath returns the path to the detected plan file.
+func (p *PlannerWrapper) PlanFilePath() string {
+	return p.planFilePath
+}
+
+// generatePlanFilename creates a filename from the prompt.
+// Example: "Create a hello world program" -> "plan-create-a-hello-world.md"
+func (p *PlannerWrapper) generatePlanFilename() string {
+	prompt := p.config.Prompt
+	// Lowercase and replace non-alphanumeric with hyphens
+	prompt = strings.ToLower(prompt)
+	var result strings.Builder
+	result.WriteString("plan-")
+	wordCount := 0
+	inWord := false
+	for _, r := range prompt {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			result.WriteRune(r)
+			inWord = true
+		} else if inWord {
+			result.WriteRune('-')
+			inWord = false
+			wordCount++
+			if wordCount >= 5 { // Limit to ~5 words
+				break
+			}
+		}
+	}
+	s := strings.TrimSuffix(result.String(), "-")
+	return s + ".md"
 }
