@@ -1,0 +1,3 @@
+{"id":"msg_1_1768865521016","timestamp":"2026-01-19T23:32:01.016Z","direction":"sent","turnNumber":1,"message":{"type":"user","message":{"role":"user","content":"Search latest news about US tariff rate against China/Japan/EU"}}}
+{"id":"msg_151_1768865536663","timestamp":"2026-01-19T23:32:16.663Z","direction":"sent","turnNumber":2,"message":{"type":"user","message":{"role":"user","content":"Put your results in csv file"}}}
+{"id":"msg_325_1768865543381","timestamp":"2026-01-19T23:32:23.381Z","direction":"sent","turnNumber":3,"message":{"type":"user","message":{"role":"user","content":"Write a python code to convert them to a simple html chart"}}}
