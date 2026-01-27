@@ -62,6 +62,9 @@ type sessionRecorder struct {
 	fromCliFile *os.File
 
 	initialized bool
+
+	// Buffer for messages sent before initialization
+	pendingSent []interface{}
 }
 
 // newSessionRecorder creates a new session recorder.
@@ -70,8 +73,9 @@ func newSessionRecorder(baseDir string) *sessionRecorder {
 		baseDir = ".claude-sessions"
 	}
 	return &sessionRecorder{
-		baseDir: baseDir,
-		turns:   make([]TurnSummary, 0),
+		baseDir:     baseDir,
+		turns:       make([]TurnSummary, 0),
+		pendingSent: make([]interface{}, 0),
 	}
 }
 
@@ -108,6 +112,18 @@ func (sr *sessionRecorder) Initialize(meta RecordingMetadata) error {
 	}
 
 	sr.initialized = true
+
+	// Flush any pending sent messages that were buffered before initialization
+	for _, msg := range sr.pendingSent {
+		data, err := json.Marshal(msg)
+		if err != nil {
+			continue
+		}
+		sr.toCliFile.Write(data)
+		sr.toCliFile.Write([]byte("\n"))
+	}
+	sr.pendingSent = nil // Clear the buffer
+
 	return nil
 }
 
@@ -116,7 +132,9 @@ func (sr *sessionRecorder) RecordSent(msg interface{}) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
+	// If not initialized yet, buffer the message for later
 	if !sr.initialized || sr.toCliFile == nil {
+		sr.pendingSent = append(sr.pendingSent, msg)
 		return
 	}
 
