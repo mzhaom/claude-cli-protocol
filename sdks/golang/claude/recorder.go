@@ -1,10 +1,12 @@
 package claude
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -47,6 +49,55 @@ func (r *SessionRecording) TotalCost() float64 {
 	return total
 }
 
+// RecordedMessage is the container format for recorded messages.
+// Each message is wrapped with a timestamp and direction indicator.
+type RecordedMessage struct {
+	Timestamp time.Time   `json:"timestamp"`
+	Direction string      `json:"direction"` // "sent" or "received"
+	Message   interface{} `json:"message"`
+}
+
+// MarshalJSON implements custom JSON marshaling with millisecond timestamp precision.
+func (r RecordedMessage) MarshalJSON() ([]byte, error) {
+	type alias struct {
+		Timestamp string      `json:"timestamp"`
+		Direction string      `json:"direction"`
+		Message   interface{} `json:"message"`
+	}
+	return json.Marshal(alias{
+		Timestamp: r.Timestamp.UTC().Format("2006-01-02T15:04:05.000Z"),
+		Direction: r.Direction,
+		Message:   r.Message,
+	})
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for timestamps.
+func (r *RecordedMessage) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Timestamp string          `json:"timestamp"`
+		Direction string          `json:"direction"`
+		Message   json.RawMessage `json:"message"`
+	}
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+
+	t, err := time.Parse("2006-01-02T15:04:05.000Z", a.Timestamp)
+	if err != nil {
+		// Try RFC3339 as fallback
+		t, err = time.Parse(time.RFC3339, a.Timestamp)
+		if err != nil {
+			return err
+		}
+	}
+
+	r.Timestamp = t
+	r.Direction = a.Direction
+	r.Message = a.Message
+	return nil
+}
+
 // sessionRecorder records session messages to disk.
 type sessionRecorder struct {
 	mu sync.Mutex
@@ -58,13 +109,12 @@ type sessionRecorder struct {
 	metadata RecordingMetadata
 	turns    []TurnSummary
 
-	toCliFile   *os.File
-	fromCliFile *os.File
+	messagesFile *os.File // single file for all messages
 
 	initialized bool
 
-	// Buffer for messages sent before initialization
-	pendingSent []interface{}
+	// Buffer for messages before initialization (both directions)
+	pendingMessages []RecordedMessage
 }
 
 // newSessionRecorder creates a new session recorder.
@@ -73,9 +123,9 @@ func newSessionRecorder(baseDir string) *sessionRecorder {
 		baseDir = ".claude-sessions"
 	}
 	return &sessionRecorder{
-		baseDir:     baseDir,
-		turns:       make([]TurnSummary, 0),
-		pendingSent: make([]interface{}, 0),
+		baseDir:         baseDir,
+		turns:           make([]TurnSummary, 0),
+		pendingMessages: make([]RecordedMessage, 0),
 	}
 }
 
@@ -98,71 +148,80 @@ func (sr *sessionRecorder) Initialize(meta RecordingMetadata) error {
 		return err
 	}
 
-	// Open message files
+	// Open single messages file
 	var err error
-	sr.toCliFile, err = os.Create(filepath.Join(sr.dirPath, "to_cli.jsonl"))
+	sr.messagesFile, err = os.Create(filepath.Join(sr.dirPath, "messages.jsonl"))
 	if err != nil {
-		return err
-	}
-
-	sr.fromCliFile, err = os.Create(filepath.Join(sr.dirPath, "from_cli.jsonl"))
-	if err != nil {
-		sr.toCliFile.Close()
 		return err
 	}
 
 	sr.initialized = true
 
-	// Flush any pending sent messages that were buffered before initialization
-	for _, msg := range sr.pendingSent {
-		data, err := json.Marshal(msg)
-		if err != nil {
-			continue
-		}
-		sr.toCliFile.Write(data)
-		sr.toCliFile.Write([]byte("\n"))
+	// Sort pending messages by timestamp and flush
+	sort.Slice(sr.pendingMessages, func(i, j int) bool {
+		return sr.pendingMessages[i].Timestamp.Before(sr.pendingMessages[j].Timestamp)
+	})
+
+	for _, record := range sr.pendingMessages {
+		sr.writeRecord(record)
 	}
-	sr.pendingSent = nil // Clear the buffer
+	sr.pendingMessages = nil // Clear the buffer
 
 	return nil
 }
 
-// RecordSent records a message sent to the CLI (writes raw message JSON).
+// writeRecord writes a single record to the messages file.
+// Must be called with lock held.
+func (sr *sessionRecorder) writeRecord(record RecordedMessage) {
+	if sr.messagesFile == nil {
+		return
+	}
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		return
+	}
+
+	sr.messagesFile.Write(data)
+	sr.messagesFile.Write([]byte("\n"))
+}
+
+// RecordSent records a message sent to the CLI.
 func (sr *sessionRecorder) RecordSent(msg interface{}) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	// If not initialized yet, buffer the message for later
-	if !sr.initialized || sr.toCliFile == nil {
-		sr.pendingSent = append(sr.pendingSent, msg)
+	record := RecordedMessage{
+		Timestamp: time.Now(),
+		Direction: "sent",
+		Message:   msg,
+	}
+
+	if !sr.initialized {
+		sr.pendingMessages = append(sr.pendingMessages, record)
 		return
 	}
 
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-
-	sr.toCliFile.Write(data)
-	sr.toCliFile.Write([]byte("\n"))
+	sr.writeRecord(record)
 }
 
-// RecordReceived records a message received from the CLI (writes raw message JSON).
+// RecordReceived records a message received from the CLI.
 func (sr *sessionRecorder) RecordReceived(msg interface{}) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	if !sr.initialized || sr.fromCliFile == nil {
+	record := RecordedMessage{
+		Timestamp: time.Now(),
+		Direction: "received",
+		Message:   msg,
+	}
+
+	if !sr.initialized {
+		sr.pendingMessages = append(sr.pendingMessages, record)
 		return
 	}
 
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-
-	sr.fromCliFile.Write(data)
-	sr.fromCliFile.Write([]byte("\n"))
+	sr.writeRecord(record)
 }
 
 // StartTurn starts recording a new turn.
@@ -256,11 +315,8 @@ func (sr *sessionRecorder) Close() error {
 
 	sr.saveMeta()
 
-	if sr.toCliFile != nil {
-		sr.toCliFile.Close()
-	}
-	if sr.fromCliFile != nil {
-		sr.fromCliFile.Close()
+	if sr.messagesFile != nil {
+		sr.messagesFile.Close()
 	}
 
 	return nil
@@ -280,4 +336,26 @@ func LoadRecording(dirPath string) (*SessionRecording, error) {
 	}
 
 	return &recording, nil
+}
+
+// LoadMessages loads recorded messages from a session directory.
+// Returns all messages in chronological order with timestamps and direction.
+func LoadMessages(dirPath string) ([]RecordedMessage, error) {
+	messagesPath := filepath.Join(dirPath, "messages.jsonl")
+	file, err := os.Open(messagesPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var messages []RecordedMessage
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var record RecordedMessage
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			continue // skip malformed lines
+		}
+		messages = append(messages, record)
+	}
+	return messages, scanner.Err()
 }

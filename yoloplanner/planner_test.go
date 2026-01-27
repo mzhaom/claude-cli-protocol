@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
 func TestReadLineWithContext_ReturnsLine(t *testing.T) {
@@ -242,7 +244,7 @@ func TestParseQuestionOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseQuestionOptions(tt.input)
+			result := render.ParseQuestionOptions(tt.input)
 			if len(result) != len(tt.expected) {
 				t.Errorf("expected %d options, got %d", len(tt.expected), len(result))
 				return

@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
 // readLineWithContext reads a line from stdin with context cancellation support.
@@ -119,6 +120,8 @@ func (p *PlannerWrapper) Start(ctx context.Context) error {
 		claude.WithModel(p.config.Model),
 		// Start in default mode - we'll switch to plan mode via control message
 		claude.WithPermissionMode(claude.PermissionModeDefault),
+		// Route all permission prompts through stdio protocol
+		claude.WithPermissionPromptToolStdio(),
 		// Auto-approve all permissions instead of using --dangerously-skip-permissions
 		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
 		claude.WithRecording(p.config.RecordingDir),
@@ -246,12 +249,6 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 	return false, nil
 }
 
-// QuestionOption represents an option for a question.
-type QuestionOption struct {
-	Label       string
-	Description string
-}
-
 // handleAskUserQuestion handles the AskUserQuestion tool call.
 func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[string]interface{}) error {
 	questions, ok := input["questions"].([]interface{})
@@ -272,7 +269,7 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[st
 		optionsRaw, _ := qMap["options"].([]interface{})
 
 		// Parse options - can be strings or objects with label/description
-		options := parseQuestionOptions(optionsRaw)
+		options := render.ParseQuestionOptions(optionsRaw)
 
 		// In simple mode, auto-select first option but show full question
 		if p.config.Simple && len(options) > 0 {
@@ -305,25 +302,6 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[st
 	responseMsg := formatQuestionResponses(questions, responses)
 	_, err := p.session.SendMessage(ctx, responseMsg)
 	return err
-}
-
-// parseQuestionOptions parses options from the AskUserQuestion input.
-// Options can be strings or objects with label/description fields.
-func parseQuestionOptions(optionsRaw []interface{}) []QuestionOption {
-	options := make([]QuestionOption, 0, len(optionsRaw))
-	for _, opt := range optionsRaw {
-		switch o := opt.(type) {
-		case string:
-			options = append(options, QuestionOption{Label: o})
-		case map[string]interface{}:
-			label, _ := o["label"].(string)
-			desc, _ := o["description"].(string)
-			if label != "" {
-				options = append(options, QuestionOption{Label: label, Description: desc})
-			}
-		}
-	}
-	return options
 }
 
 // handleExitPlanMode handles the ExitPlanMode tool call.
