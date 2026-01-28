@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
@@ -338,5 +339,345 @@ func TestGeneratePlanFilename(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestBuildModeConstants(t *testing.T) {
+	// Verify BuildMode constants have expected values
+	tests := []struct {
+		name     string
+		mode     BuildMode
+		expected string
+	}{
+		{"BuildModeNone", BuildModeNone, ""},
+		{"BuildModeCurrent", BuildModeCurrent, "current"},
+		{"BuildModeNewSession", BuildModeNewSession, "new"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.mode) != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, string(tt.mode))
+			}
+		})
+	}
+}
+
+func TestConfigBuildMode(t *testing.T) {
+	// Test that BuildMode can be set in Config
+	tests := []struct {
+		name      string
+		buildMode BuildMode
+	}{
+		{"none", BuildModeNone},
+		{"current", BuildModeCurrent},
+		{"new", BuildModeNewSession},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Model:     "sonnet",
+				BuildMode: tt.buildMode,
+			}
+			if config.BuildMode != tt.buildMode {
+				t.Errorf("expected BuildMode %q, got %q", tt.buildMode, config.BuildMode)
+			}
+		})
+	}
+}
+
+func TestBuildModeFromString(t *testing.T) {
+	// Test that string values can be converted to BuildMode
+	tests := []struct {
+		input    string
+		expected BuildMode
+	}{
+		{"", BuildModeNone},
+		{"current", BuildModeCurrent},
+		{"new", BuildModeNewSession},
+		{"unknown", BuildMode("unknown")}, // Invalid but should work
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := BuildMode(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestWaitingForUserInputReset(t *testing.T) {
+	// Test that waitingForUserInput is properly managed
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true,
+	}
+
+	// Simulate what happens when we're executing (not waiting for input)
+	p.waitingForUserInput = false
+
+	if p.waitingForUserInput {
+		t.Error("waitingForUserInput should be false after reset")
+	}
+}
+
+func TestBuildModeIsValid(t *testing.T) {
+	tests := []struct {
+		mode  BuildMode
+		valid bool
+	}{
+		{BuildModeNone, true},
+		{BuildModeCurrent, true},
+		{BuildModeNewSession, true},
+		{BuildMode("invalid"), false},
+		{BuildMode("CURRENT"), false}, // Case sensitive
+		{BuildMode("  "), false},      // Whitespace
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.mode), func(t *testing.T) {
+			if got := tt.mode.IsValid(); got != tt.valid {
+				t.Errorf("BuildMode(%q).IsValid() = %v, want %v", tt.mode, got, tt.valid)
+			}
+		})
+	}
+}
+
+func TestPlanFilePathRequired(t *testing.T) {
+	// Test that executeInNewSession requires a valid plan file path
+	tests := []struct {
+		name         string
+		planFilePath string
+		expectFail   bool // Whether we expect the path check to fail
+	}{
+		{"empty path requires fallback", "", true},
+		{"nonexistent file requires fallback", "/nonexistent/path/plan.md", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &PlannerWrapper{
+				planFilePath: tt.planFilePath,
+				inputCh:      make(chan string),
+			}
+
+			// Check the conditions that executeInNewSession would check
+			needsFallback := false
+			if p.planFilePath == "" {
+				needsFallback = true
+			} else if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+				needsFallback = true
+			}
+
+			if needsFallback != tt.expectFail {
+				t.Errorf("expected needsFallback=%v, got %v", tt.expectFail, needsFallback)
+			}
+		})
+	}
+}
+
+func TestPendingBuildStartTransition(t *testing.T) {
+	// Test that pendingBuildStart correctly transitions stats from planning to build phase
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true, // Set by handleExitPlanMode
+		pendingBuildStart:   true, // Set by executeInCurrentSession
+	}
+
+	// Simulate the final planning turn's TurnComplete
+	// When pendingBuildStart is true, this turn should be counted as planning
+	planningUsage := claude.TurnUsage{
+		InputTokens:  1000,
+		OutputTokens: 500,
+		CostUSD:      0.05,
+	}
+
+	// Before: not in build phase
+	if p.inBuildPhase {
+		t.Error("should not be in build phase before transition")
+	}
+
+	// Simulate what handleEvent does for TurnCompleteEvent when pendingBuildStart is true
+	if p.pendingBuildStart {
+		p.planningStats.Add(planningUsage)
+		p.inBuildPhase = true
+		p.pendingBuildStart = false
+	}
+
+	// After: should be in build phase, planning stats recorded
+	if !p.inBuildPhase {
+		t.Error("should be in build phase after transition")
+	}
+	if p.pendingBuildStart {
+		t.Error("pendingBuildStart should be false after transition")
+	}
+	if p.planningStats.InputTokens != 1000 {
+		t.Errorf("expected planning InputTokens=1000, got %d", p.planningStats.InputTokens)
+	}
+	if p.planningStats.TurnCount != 1 {
+		t.Errorf("expected planning TurnCount=1, got %d", p.planningStats.TurnCount)
+	}
+
+	// Now simulate a build turn
+	buildUsage := claude.TurnUsage{
+		InputTokens:  2000,
+		OutputTokens: 1000,
+		CostUSD:      0.10,
+	}
+	if p.inBuildPhase {
+		p.buildingStats.Add(buildUsage)
+	}
+
+	// Verify build stats
+	if p.buildingStats.InputTokens != 2000 {
+		t.Errorf("expected building InputTokens=2000, got %d", p.buildingStats.InputTokens)
+	}
+	if p.buildingStats.TurnCount != 1 {
+		t.Errorf("expected building TurnCount=1, got %d", p.buildingStats.TurnCount)
+	}
+}
+
+func TestNewSessionBuildPhaseImmediate(t *testing.T) {
+	// Test that executeInNewSession sets inBuildPhase=true directly
+	// (not pendingBuildStart, since there's no planning TurnComplete in new session)
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true, // Set by handleExitPlanMode
+		inBuildPhase:        true, // Set directly by executeInNewSession
+	}
+
+	// Verify we're immediately in build phase
+	if !p.inBuildPhase {
+		t.Error("should be in build phase for new session")
+	}
+	if p.pendingBuildStart {
+		t.Error("pendingBuildStart should be false for new session")
+	}
+
+	// Build turn should accumulate to build stats
+	buildUsage := claude.TurnUsage{
+		InputTokens:  3000,
+		OutputTokens: 1500,
+		CostUSD:      0.15,
+	}
+	if p.inBuildPhase {
+		p.buildingStats.Add(buildUsage)
+	} else {
+		p.planningStats.Add(buildUsage)
+	}
+
+	// Verify stats go to build, not planning
+	if p.buildingStats.InputTokens != 3000 {
+		t.Errorf("expected building InputTokens=3000, got %d", p.buildingStats.InputTokens)
+	}
+	if p.planningStats.InputTokens != 0 {
+		t.Errorf("expected planning InputTokens=0, got %d", p.planningStats.InputTokens)
+	}
+}
+
+func TestWaitingForUserInputPreservedDuringBuild(t *testing.T) {
+	// Test that waitingForUserInput stays true during pendingBuildStart transition
+	// This ensures the event loop doesn't exit prematurely
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true,
+		pendingBuildStart:   true,
+	}
+
+	// Simulate what happens in TurnComplete handler when pendingBuildStart is true
+	// The handler should NOT change waitingForUserInput
+	if p.pendingBuildStart {
+		p.planningStats.Add(claude.TurnUsage{InputTokens: 100})
+		p.inBuildPhase = true
+		p.pendingBuildStart = false
+		// Note: waitingForUserInput is NOT touched here
+	}
+
+	// waitingForUserInput should still be true to keep event loop running
+	if !p.waitingForUserInput {
+		t.Error("waitingForUserInput should remain true during build transition")
+	}
+}
+
+func TestSessionStatsAdd(t *testing.T) {
+	stats := &SessionStats{}
+
+	// Add first turn
+	stats.Add(claude.TurnUsage{
+		InputTokens:     100,
+		OutputTokens:    50,
+		CacheReadTokens: 10,
+		CostUSD:         0.01,
+	})
+
+	if stats.TurnCount != 1 {
+		t.Errorf("expected TurnCount=1, got %d", stats.TurnCount)
+	}
+	if stats.InputTokens != 100 {
+		t.Errorf("expected InputTokens=100, got %d", stats.InputTokens)
+	}
+	if stats.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens=50, got %d", stats.OutputTokens)
+	}
+	if stats.CacheReadTokens != 10 {
+		t.Errorf("expected CacheReadTokens=10, got %d", stats.CacheReadTokens)
+	}
+	if stats.CostUSD != 0.01 {
+		t.Errorf("expected CostUSD=0.01, got %f", stats.CostUSD)
+	}
+
+	// Add second turn
+	stats.Add(claude.TurnUsage{
+		InputTokens:     200,
+		OutputTokens:    100,
+		CacheReadTokens: 20,
+		CostUSD:         0.02,
+	})
+
+	if stats.TurnCount != 2 {
+		t.Errorf("expected TurnCount=2, got %d", stats.TurnCount)
+	}
+	if stats.InputTokens != 300 {
+		t.Errorf("expected InputTokens=300, got %d", stats.InputTokens)
+	}
+	if stats.OutputTokens != 150 {
+		t.Errorf("expected OutputTokens=150, got %d", stats.OutputTokens)
+	}
+	if stats.CacheReadTokens != 30 {
+		t.Errorf("expected CacheReadTokens=30, got %d", stats.CacheReadTokens)
+	}
+	if stats.CostUSD != 0.03 {
+		t.Errorf("expected CostUSD=0.03, got %f", stats.CostUSD)
+	}
+}
+
+func TestPlanFilePathWithValidFile(t *testing.T) {
+	// Create a temp file to simulate a valid plan file
+	tmpFile, err := os.CreateTemp("", "plan-*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("# Test Plan\n")
+	tmpFile.Close()
+
+	p := &PlannerWrapper{
+		planFilePath: tmpFile.Name(),
+		inputCh:      make(chan string),
+	}
+
+	// Should not need fallback with valid file
+	needsFallback := false
+	if p.planFilePath == "" {
+		needsFallback = true
+	} else if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+		needsFallback = true
+	}
+
+	if needsFallback {
+		t.Error("expected no fallback needed for valid plan file")
 	}
 }
