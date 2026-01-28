@@ -1,28 +1,93 @@
-// Package codex provides types and utilities for interacting with the Codex CLI
-// via the app-server JSON-RPC protocol.
+// Package codex provides a Go SDK for interacting with the Codex CLI app-server.
 //
-// The Codex app-server uses JSON-RPC 2.0 over stdio. This package provides:
-//   - JSON-RPC request/response types
-//   - Protocol-specific types for thread/turn management
-//   - Notification types for streaming events
+// The SDK provides both low-level JSON-RPC types and high-level abstractions
+// for common operations like creating threads, sending messages, and handling
+// streaming responses.
 //
-// Protocol documentation can be found in APP_SERVER_PROTOCOL.md.
+// # Basic Usage
 //
-// For a working example of how to use these types, see examples/codex_basic/main.go
-// which demonstrates the full flow:
-//  1. Start codex app-server subprocess
-//  2. Send initialize request
-//  3. Start a thread
-//  4. Start turns and receive streaming responses
+// For simple one-shot queries:
 //
-// Key JSON-RPC methods:
-//   - initialize: Initialize the connection
-//   - thread/start: Create a new conversation thread
-//   - turn/start: Start processing user input
-//   - turn/interrupt: Interrupt an in-progress turn
+//	client := codex.NewClient(
+//	    codex.WithClientName("my-app"),
+//	    codex.WithClientVersion("1.0.0"),
+//	)
 //
-// Key notifications (server -> client):
-//   - thread/started: Thread created
-//   - turn/started, turn/completed: Turn lifecycle
-//   - item/agentMessage/delta: Streaming text
+//	if err := client.Start(ctx); err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer client.Stop()
+//
+//	response, err := client.Ask(ctx, "What is 2+2?")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(response)
+//
+// # Multi-Turn Conversations
+//
+// For conversations with multiple turns:
+//
+//	thread, err := client.CreateThread(ctx,
+//	    codex.WithModel("gpt-4o"),
+//	    codex.WithWorkDir("/path/to/project"),
+//	)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Wait for MCP startup
+//	for event := range client.Events() {
+//	    if e, ok := event.(codex.ThreadReadyEvent); ok && e.ThreadID == thread.ID() {
+//	        break
+//	    }
+//	}
+//
+//	// First turn
+//	result1, err := thread.Ask(ctx, "What files are in this directory?")
+//	fmt.Println(result1.FullText)
+//
+//	// Follow-up turn
+//	result2, err := thread.Ask(ctx, "Summarize the main.go file")
+//	fmt.Println(result2.FullText)
+//
+// # Streaming Events
+//
+// For real-time streaming of responses:
+//
+//	thread, _ := client.CreateThread(ctx)
+//	thread.SendMessage(ctx, "Write a haiku about Go")
+//
+//	for event := range client.Events() {
+//	    switch e := event.(type) {
+//	    case codex.TextDeltaEvent:
+//	        fmt.Print(e.Delta) // Stream text as it arrives
+//	    case codex.TurnCompletedEvent:
+//	        fmt.Println("\nDone!")
+//	        return
+//	    }
+//	}
+//
+// # Configuration Options
+//
+// Client-level options:
+//   - WithCodexPath: Custom path to codex binary
+//   - WithClientName: Client identifier
+//   - WithClientVersion: Client version string
+//   - WithEventBufferSize: Event channel buffer size
+//   - WithStderrHandler: Handler for app-server stderr
+//   - WithApprovalHandler: Handler for tool approval requests
+//
+// Thread-level options:
+//   - WithModel: Model to use (e.g., "gpt-4o")
+//   - WithModelProvider: Model provider
+//   - WithWorkDir: Working directory
+//   - WithApprovalPolicy: Tool approval policy
+//   - WithSandbox: Sandbox configuration
+//
+// Turn-level options:
+//   - WithTurnModel: Override model for this turn
+//   - WithEffort: Reasoning effort level
+//   - WithSummary: Context for the turn
+//   - WithOutputSchema: Structured output schema
 package codex
