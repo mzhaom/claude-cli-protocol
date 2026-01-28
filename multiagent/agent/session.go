@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
@@ -287,6 +288,11 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	return result, execResult, taskID, nil
 }
 
+// eventGoroutineTimeout is the maximum time to wait for the event processing
+// goroutine to finish after stopping the session. This provides a safety bound
+// in case Stop() fails to close the events channel.
+const eventGoroutineTimeout = 5 * time.Second
+
 // runSessionWithFileTracking executes a prompt on a session while tracking file operations.
 // This is extracted to allow testing the stop-before-wait ordering with mock sessions.
 //
@@ -294,7 +300,7 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 // 1. Start session and spawn event goroutine
 // 2. Execute Ask()
 // 3. Stop session (closes events channel)
-// 4. Wait for event goroutine to finish
+// 4. Wait for event goroutine to finish (with timeout)
 //
 // If step 3 and 4 are reversed, the goroutine blocks forever on the events channel.
 func runSessionWithFileTracking(ctx context.Context, session sessionRunner, prompt string) (*claude.TurnResult, *ExecuteResult, error) {
@@ -342,16 +348,28 @@ func runSessionWithFileTracking(ctx context.Context, session sessionRunner, prom
 	// CRITICAL: Stop the session first - this closes the events channel
 	// If we wait before stopping, we deadlock because the goroutine
 	// is blocked on `for event := range events` which never closes.
-	session.Stop()
+	stopErr := session.Stop()
 
-	// Now safe to wait for event processing goroutine to finish
-	<-eventsDone
+	// Wait for event processing goroutine to finish with a timeout.
+	// The timeout protects against edge cases where Stop() fails to close
+	// the events channel (which would cause an unbounded wait).
+	select {
+	case <-eventsDone:
+		// Goroutine finished normally
+	case <-time.After(eventGoroutineTimeout):
+		// Timeout - goroutine may be stuck, but we can't wait forever.
+		// The file lists may be incomplete, but we avoid deadlock.
+	}
 
+	// Propagate stop error if Ask succeeded but Stop failed
+	if err == nil && stopErr != nil {
+		return nil, nil, fmt.Errorf("failed to stop session: %w", stopErr)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Safe to access file lists now - goroutine has finished
+	// Safe to access file lists now - goroutine has finished (or timed out)
 	filesMu.Lock()
 	execResult := &ExecuteResult{
 		TurnResult:    result,

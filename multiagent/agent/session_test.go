@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -294,4 +295,87 @@ func (m *fileTrackingMock) Ask(ctx context.Context, prompt string) (*claude.Turn
 		Input: map[string]interface{}{"file_path": "/tmp/new1.go"},
 	}
 	return m.askResult, m.askErr
+}
+
+// TestRunSessionWithFileTracking_StopError verifies that Stop() errors are propagated.
+func TestRunSessionWithFileTracking_StopError(t *testing.T) {
+	mock := &stopErrorMock{
+		mockSessionRunner: newMockSessionRunner(),
+		stopErr:           errors.New("stop failed"),
+	}
+	ctx := context.Background()
+
+	_, _, err := runSessionWithFileTracking(ctx, mock, "test")
+	if err == nil {
+		t.Fatal("expected error from Stop failure")
+	}
+	if !errors.Is(err, mock.stopErr) && err.Error() != "failed to stop session: stop failed" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// stopErrorMock simulates a session where Stop() returns an error but still closes events.
+type stopErrorMock struct {
+	*mockSessionRunner
+	stopErr error
+}
+
+func (m *stopErrorMock) Stop() error {
+	// Still close events (otherwise we'd timeout)
+	if !m.stopped {
+		m.stopped = true
+		close(m.stoppedChan)
+		close(m.events)
+	}
+	return m.stopErr
+}
+
+// TestRunSessionWithFileTracking_StopFailsToCloseEvents verifies bounded wait behavior
+// when Stop() doesn't close the events channel.
+func TestRunSessionWithFileTracking_StopFailsToCloseEvents(t *testing.T) {
+	// Skip in short mode since this test waits for the timeout
+	if testing.Short() {
+		t.Skip("skipping timeout test in short mode")
+	}
+
+	mock := &brokenStopMock{
+		mockSessionRunner: newMockSessionRunner(),
+	}
+	ctx := context.Background()
+
+	start := time.Now()
+	result, execResult, err := runSessionWithFileTracking(ctx, mock, "test")
+	elapsed := time.Since(start)
+
+	// Should complete (with timeout) rather than deadlock forever
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if execResult == nil {
+		t.Fatal("expected non-nil execResult")
+	}
+
+	// Should have waited approximately the timeout duration
+	if elapsed < eventGoroutineTimeout-100*time.Millisecond {
+		t.Errorf("expected to wait ~%v, but only waited %v", eventGoroutineTimeout, elapsed)
+	}
+	if elapsed > eventGoroutineTimeout+1*time.Second {
+		t.Errorf("waited too long: %v", elapsed)
+	}
+}
+
+// brokenStopMock simulates a session where Stop() succeeds but fails to close events.
+type brokenStopMock struct {
+	*mockSessionRunner
+}
+
+func (m *brokenStopMock) Stop() error {
+	// Intentionally don't close events - simulates a broken session
+	m.stopped = true
+	close(m.stoppedChan)
+	// NOT closing m.events - this is the bug we're protecting against
+	return nil
 }
