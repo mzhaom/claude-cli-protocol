@@ -431,6 +431,11 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 
 	fmt.Println("\n→ Starting new session to implement plan...")
 
+	// Log the planning session's recording path before stopping
+	if oldRecordingPath := p.session.RecordingPath(); oldRecordingPath != "" {
+		p.renderer.Status(fmt.Sprintf("Planning session recorded to: %s", oldRecordingPath))
+	}
+
 	// Note: There's no control message for "/clear" in the protocol.
 	// We must stop the current session and start a fresh claude process.
 	p.session.Stop()
@@ -451,6 +456,9 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	if err := p.session.Start(ctx); err != nil {
 		return false, fmt.Errorf("failed to start new session: %w", err)
 	}
+
+	// Log that we're starting implementation in a new session
+	p.renderer.Status(fmt.Sprintf("Implementation session started, using plan: %s", p.planFilePath))
 
 	// We're executing, not waiting for user input. The next TurnComplete
 	// should exit the event loop.
