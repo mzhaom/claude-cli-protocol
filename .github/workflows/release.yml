@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Set binary extension
+        id: ext
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            echo "ext=.exe" >> $GITHUB_OUTPUT
+          else
+            echo "ext=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build yoloplanner
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          cd yoloplanner
+          go build -o yoloplanner${{ steps.ext.outputs.ext }} ./cmd
+
+      - name: Build sessionplayer
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          cd tools/sessionplayer
+          go build -o sessionplayer${{ steps.ext.outputs.ext }} ./cmd
+
+      - name: Create archive (Unix)
+        if: matrix.goos != 'windows'
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          mkdir -p dist
+          cp yoloplanner/yoloplanner dist/
+          cp tools/sessionplayer/sessionplayer dist/
+          tar -czvf claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C dist .
+
+      - name: Create archive (Windows)
+        if: matrix.goos == 'windows'
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          mkdir -p dist
+          cp yoloplanner/yoloplanner.exe dist/
+          cp tools/sessionplayer/sessionplayer.exe dist/
+          cd dist && zip ../claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip * && cd ..
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            gh release upload ${VERSION} claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          else
+            gh release upload ${VERSION} claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          fi
