@@ -340,3 +340,107 @@ func TestGeneratePlanFilename(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildModeConstants(t *testing.T) {
+	// Verify BuildMode constants have expected values
+	tests := []struct {
+		name     string
+		mode     BuildMode
+		expected string
+	}{
+		{"BuildModeNone", BuildModeNone, ""},
+		{"BuildModeCurrent", BuildModeCurrent, "current"},
+		{"BuildModeNewSession", BuildModeNewSession, "new"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.mode) != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, string(tt.mode))
+			}
+		})
+	}
+}
+
+func TestConfigBuildMode(t *testing.T) {
+	// Test that BuildMode can be set in Config
+	tests := []struct {
+		name      string
+		buildMode BuildMode
+	}{
+		{"none", BuildModeNone},
+		{"current", BuildModeCurrent},
+		{"new", BuildModeNewSession},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Model:     "sonnet",
+				BuildMode: tt.buildMode,
+			}
+			if config.BuildMode != tt.buildMode {
+				t.Errorf("expected BuildMode %q, got %q", tt.buildMode, config.BuildMode)
+			}
+		})
+	}
+}
+
+func TestBuildModeFromString(t *testing.T) {
+	// Test that string values can be converted to BuildMode
+	tests := []struct {
+		input    string
+		expected BuildMode
+	}{
+		{"", BuildModeNone},
+		{"current", BuildModeCurrent},
+		{"new", BuildModeNewSession},
+		{"unknown", BuildMode("unknown")}, // Invalid but should work
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := BuildMode(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestWaitingForUserInputReset(t *testing.T) {
+	// Test that waitingForUserInput is properly managed
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true,
+	}
+
+	// Simulate what happens when we're executing (not waiting for input)
+	p.waitingForUserInput = false
+
+	if p.waitingForUserInput {
+		t.Error("waitingForUserInput should be false after reset")
+	}
+}
+
+func TestBuildModeIsValid(t *testing.T) {
+	tests := []struct {
+		mode  BuildMode
+		valid bool
+	}{
+		{BuildModeNone, true},
+		{BuildModeCurrent, true},
+		{BuildModeNewSession, true},
+		{BuildMode("invalid"), false},
+		{BuildMode("CURRENT"), false}, // Case sensitive
+		{BuildMode("  "), false},      // Whitespace
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.mode), func(t *testing.T) {
+			if got := tt.mode.IsValid(); got != tt.valid {
+				t.Errorf("BuildMode(%q).IsValid() = %v, want %v", tt.mode, got, tt.valid)
+			}
+		})
+	}
+}

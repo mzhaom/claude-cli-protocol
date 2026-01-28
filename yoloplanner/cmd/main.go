@@ -32,6 +32,7 @@ func main() {
 	systemPrompt := flag.String("system", "", "Custom system prompt")
 	verbose := flag.Bool("verbose", false, "Show detailed tool results (errors are always shown)")
 	simple := flag.Bool("simple", false, "Auto-answer questions with first option and export plan on completion")
+	build := flag.String("build", "", "After planning, execute: 'current' (same session) or 'new' (fresh session)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <prompt>\n\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "A simple wrapper over claude-cli for planner mode.")
@@ -65,6 +66,13 @@ func main() {
 		}
 	}
 
+	// Validate build mode
+	buildMode := yoloplanner.BuildMode(*build)
+	if !buildMode.IsValid() {
+		fmt.Fprintf(os.Stderr, "Error: invalid build mode %q. Valid values: 'current', 'new', or empty\n", *build)
+		os.Exit(1)
+	}
+
 	// Create config
 	config := yoloplanner.Config{
 		Model:        *model,
@@ -74,6 +82,7 @@ func main() {
 		Verbose:      *verbose,
 		Simple:       *simple,
 		Prompt:       prompt,
+		BuildMode:    buildMode,
 	}
 
 	// Create planner wrapper

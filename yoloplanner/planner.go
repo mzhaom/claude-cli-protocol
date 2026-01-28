@@ -45,6 +45,28 @@ func (p *PlannerWrapper) readLineWithContext(ctx context.Context) (string, error
 	}
 }
 
+// BuildMode controls what happens after planning completes.
+type BuildMode string
+
+const (
+	// BuildModeNone prompts interactively (default).
+	BuildModeNone BuildMode = ""
+	// BuildModeCurrent executes in current session with full context.
+	BuildModeCurrent BuildMode = "current"
+	// BuildModeNewSession starts a fresh session to implement the plan.
+	BuildModeNewSession BuildMode = "new"
+)
+
+// IsValid returns true if the BuildMode is a recognized value.
+func (m BuildMode) IsValid() bool {
+	switch m {
+	case BuildModeNone, BuildModeCurrent, BuildModeNewSession:
+		return true
+	default:
+		return false
+	}
+}
+
 // Config holds planner configuration.
 type Config struct {
 	// Model to use: "haiku", "sonnet", "opus"
@@ -68,6 +90,10 @@ type Config struct {
 
 	// Prompt is the initial prompt, used for generating output filenames in simple mode.
 	Prompt string
+
+	// BuildMode controls what happens after planning completes in simple mode.
+	// "current" = execute in current session, "new" = execute in new session.
+	BuildMode BuildMode
 }
 
 // PlannerWrapper wraps a claude.Session with planner-specific logic.
@@ -225,6 +251,9 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 			p.waitingForUserInput = true
 			return false, p.handleAskUserQuestion(ctx, e.Input)
 		} else if e.Name == "ExitPlanMode" {
+			// Note: We set waitingForUserInput=true here, but if we're executing
+			// (not exporting), handleExitPlanMode will set it back to false
+			// since we're not waiting for user input during implementation.
 			p.waitingForUserInput = true
 			return p.handleExitPlanMode(ctx, e.Input)
 		}
@@ -309,19 +338,28 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[st
 func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[string]interface{}) (bool, error) {
 	p.renderer.PlanComplete(input)
 
-	// In simple mode, auto-export and exit
+	// In simple mode with build flag, auto-execute
 	if p.config.Simple {
-		filename := p.generatePlanFilename()
-		return p.exportPlanAndExit(ctx, filename)
+		switch p.config.BuildMode {
+		case BuildModeCurrent:
+			return p.executeInCurrentSession(ctx)
+		case BuildModeNewSession:
+			return p.executeInNewSession(ctx)
+		default:
+			// No build mode specified, export and exit (existing behavior)
+			filename := p.generatePlanFilename()
+			return p.exportPlanAndExit(ctx, filename)
+		}
 	}
 
 	fmt.Println("\n" + strings.Repeat("─", 60))
 	fmt.Println("What would you like to do?")
-	fmt.Println("  1. Execute the plan")
-	fmt.Println("  2. Export plan to markdown")
-	fmt.Println("  3. Continue refining (optional: add feedback)")
+	fmt.Println("  1. Execute in current session (keeps context)")
+	fmt.Println("  2. Execute in new session (fresh start)")
+	fmt.Println("  3. Export plan to markdown")
+	fmt.Println("  4. Continue refining (optional: add feedback)")
 	fmt.Println()
-	fmt.Print("Enter choice (1-3) or feedback: ")
+	fmt.Print("Enter choice (1-4) or feedback: ")
 
 	choice, err := p.readLineWithContext(ctx)
 	if err != nil {
@@ -330,17 +368,17 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 
 	switch choice {
 	case "1":
-		// Execute the plan
-		fmt.Println("\n→ Executing plan...")
-		_, err := p.session.SendMessage(ctx, "Please proceed with executing the plan.")
-		return false, err
+		return p.executeInCurrentSession(ctx)
 
 	case "2":
+		return p.executeInNewSession(ctx)
+
+	case "3":
 		// Export to markdown
 		filename := p.generatePlanFilename()
 		return p.exportPlanAndExit(ctx, filename)
 
-	case "3":
+	case "4":
 		// Continue refining - prompt for optional feedback
 		fmt.Print("Enter feedback (or press Enter to continue): ")
 		feedback, err := p.readLineWithContext(ctx)
@@ -361,6 +399,54 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 		_, err := p.session.SendMessage(ctx, msg)
 		return false, err
 	}
+}
+
+// executeInCurrentSession switches to bypass mode and continues implementation.
+func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, error) {
+	fmt.Println("\n→ Executing plan in current session...")
+	if err := p.session.SetPermissionMode(ctx, claude.PermissionModeBypass); err != nil {
+		return false, fmt.Errorf("failed to switch permission mode: %w", err)
+	}
+	// We're executing, not waiting for user input. The next TurnComplete
+	// should exit the event loop.
+	p.waitingForUserInput = false
+	_, err := p.session.SendMessage(ctx, "I approve this plan. Please proceed with implementation.")
+	return false, err
+}
+
+// executeInNewSession stops current session and starts fresh to implement the plan.
+func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) {
+	fmt.Println("\n→ Starting new session to implement plan...")
+
+	// Note: There's no control message for "/clear" in the protocol.
+	// We must stop the current session and start a fresh claude process.
+	p.session.Stop()
+
+	// Start new session with bypass permissions (no plan mode)
+	newOpts := []claude.SessionOption{
+		claude.WithModel(p.config.Model),
+		claude.WithPermissionMode(claude.PermissionModeBypass),
+		claude.WithPermissionPromptToolStdio(),
+		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
+		claude.WithRecording(p.config.RecordingDir),
+	}
+	if p.config.WorkDir != "" {
+		newOpts = append(newOpts, claude.WithWorkDir(p.config.WorkDir))
+	}
+
+	p.session = claude.NewSession(newOpts...)
+	if err := p.session.Start(ctx); err != nil {
+		return false, fmt.Errorf("failed to start new session: %w", err)
+	}
+
+	// We're executing, not waiting for user input. The next TurnComplete
+	// should exit the event loop.
+	p.waitingForUserInput = false
+
+	// Don't switch to plan mode - we want to execute directly
+	msg := fmt.Sprintf("Implement the plan in %s", p.planFilePath)
+	_, err := p.session.SendMessage(ctx, msg)
+	return false, err
 }
 
 // parseOptionIndex parses a 1-based numeric option selection.
