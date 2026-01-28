@@ -288,7 +288,12 @@ func (s *StreamingSubAgent) buildResult(turnResult *claude.TurnResult, durationM
 	result.Text = s.fullText
 	result.FilesCreated = s.filesCreated
 	result.FilesModified = s.filesModified
-	result.TotalCostUSD = s.totalCost
+
+	// Use turnResult.Usage.CostUSD directly instead of s.totalCost.
+	// The s.totalCost is accumulated from TurnCompleteEvent which may be
+	// dropped if the events channel is full. turnResult always has the
+	// authoritative cost from the SDK.
+	result.TotalCostUSD = turnResult.Usage.CostUSD
 
 	if !turnResult.Success && turnResult.Error != nil {
 		result.Error = turnResult.Error.Error()

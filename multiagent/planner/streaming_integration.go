@@ -53,10 +53,13 @@ func (sp *StreamingPlanner) CallDesignerStreaming(ctx context.Context, req *prot
 	iteration := sp.iterationCount + 1
 	sp.mu.Unlock()
 
+	// Create streaming sub-agent (generate requestID first for consistent tracking)
+	requestID := generateRequestID()
+
 	// Progress: phase change to designing
 	if sp.progress != nil {
 		sp.progress.Event(progress.NewPhaseChangeEvent(checkpoint.PhaseNotStarted, checkpoint.PhaseDesigning, iteration))
-		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleDesigner, "", "Analyzing requirements and creating design"))
+		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleDesigner, requestID, "Analyzing requirements and creating design"))
 	}
 
 	// Checkpoint: starting design phase
@@ -65,9 +68,6 @@ func (sp *StreamingPlanner) CallDesignerStreaming(ctx context.Context, req *prot
 			fmt.Printf("Warning: failed to save checkpoint: %v\n", err)
 		}
 	}
-
-	// Create streaming sub-agent
-	requestID := generateRequestID()
 	sub := subagent.NewStreamingSubAgent(sp.designerConfig, sp.swarmSessionID, requestID, subagent.AgentTypeDesigner)
 
 	// Store for cancellation
@@ -167,10 +167,13 @@ func (sp *StreamingPlanner) CallBuilderStreaming(ctx context.Context, req *proto
 	iteration := sp.iterationCount + 1
 	sp.mu.Unlock()
 
+	// Create streaming sub-agent (generate requestID first for consistent tracking)
+	requestID := generateRequestID()
+
 	// Progress: phase change to building
 	if sp.progress != nil {
 		sp.progress.Event(progress.NewPhaseChangeEvent(checkpoint.PhaseDesigning, checkpoint.PhaseBuilding, iteration))
-		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleBuilder, "", "Implementing code changes"))
+		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleBuilder, requestID, "Implementing code changes"))
 	}
 
 	// Checkpoint: starting build phase
@@ -179,9 +182,6 @@ func (sp *StreamingPlanner) CallBuilderStreaming(ctx context.Context, req *proto
 			fmt.Printf("Warning: failed to save checkpoint: %v\n", err)
 		}
 	}
-
-	// Create streaming sub-agent
-	requestID := generateRequestID()
 	sub := subagent.NewStreamingSubAgent(sp.builderConfig, sp.swarmSessionID, requestID, subagent.AgentTypeBuilder)
 
 	// Store for cancellation
@@ -271,10 +271,13 @@ func (sp *StreamingPlanner) CallReviewerStreaming(ctx context.Context, req *prot
 	iteration := sp.iterationCount + 1
 	sp.mu.Unlock()
 
+	// Create streaming sub-agent (generate requestID first for consistent tracking)
+	requestID := generateRequestID()
+
 	// Progress: phase change to reviewing
 	if sp.progress != nil {
 		sp.progress.Event(progress.NewPhaseChangeEvent(checkpoint.PhaseBuilding, checkpoint.PhaseReviewing, iteration))
-		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleReviewer, "", "Reviewing implementation"))
+		sp.progress.Event(progress.NewAgentStartEvent(agent.RoleReviewer, requestID, "Reviewing implementation"))
 	}
 
 	// Checkpoint: starting review phase
@@ -283,9 +286,6 @@ func (sp *StreamingPlanner) CallReviewerStreaming(ctx context.Context, req *prot
 			fmt.Printf("Warning: failed to save checkpoint: %v\n", err)
 		}
 	}
-
-	// Create streaming sub-agent
-	requestID := generateRequestID()
 	sub := subagent.NewStreamingSubAgent(sp.reviewerConfig, sp.swarmSessionID, requestID, subagent.AgentTypeReviewer)
 
 	// Store for cancellation
