@@ -570,11 +570,6 @@ func (s *Session) handleResult(msg protocol.ResultMessage) {
 		Error:      result.Error,
 	})
 
-	// Record turn completion
-	if s.recorder != nil {
-		s.recorder.CompleteTurn(result.TurnNumber, result)
-	}
-
 	// Complete turn (notifies waiters)
 	s.turnManager.CompleteTurn(result)
 }
@@ -598,9 +593,21 @@ func (s *Session) handleControlRequest(msg protocol.ControlRequest) {
 }
 
 // emit sends an event to the events channel.
+// Safe to call during/after Stop() - events are dropped if session is stopping.
 func (s *Session) emit(event Event) {
+	// Check if session is stopping before attempting to send.
+	// This prevents "send on closed channel" panic when Stop() closes s.events.
+	select {
+	case <-s.done:
+		// Session is stopping, drop event
+		return
+	default:
+	}
+
 	select {
 	case s.events <- event:
+	case <-s.done:
+		// Session stopped while waiting to send, drop event
 	default:
 		// Channel full, drop event
 		// In production, might want to log this
