@@ -214,6 +214,36 @@ type ExecuteResult struct {
 	FilesModified []string
 }
 
+// sessionRunner abstracts session operations for testing.
+// This allows injecting mock sessions to test the stop-before-wait ordering.
+type sessionRunner interface {
+	Start(ctx context.Context) error
+	Stop() error
+	Ask(ctx context.Context, prompt string) (*claude.TurnResult, error)
+	Events() <-chan claude.Event
+}
+
+// claudeSessionRunner wraps a real claude.Session.
+type claudeSessionRunner struct {
+	session *claude.Session
+}
+
+func (r *claudeSessionRunner) Start(ctx context.Context) error {
+	return r.session.Start(ctx)
+}
+
+func (r *claudeSessionRunner) Stop() error {
+	return r.session.Stop()
+}
+
+func (r *claudeSessionRunner) Ask(ctx context.Context, prompt string) (*claude.TurnResult, error) {
+	return r.session.Ask(ctx, prompt)
+}
+
+func (r *claudeSessionRunner) Events() <-chan claude.Event {
+	return r.session.Events()
+}
+
 // Execute creates a fresh session, runs the prompt, and returns the result.
 // Each call is independent - no conversation history is preserved.
 func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.TurnResult, string, error) {
@@ -242,9 +272,35 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 		claude.WithDisablePlugins(),
 	)
 
+	runner := &claudeSessionRunner{session: session}
+	result, execResult, err := runSessionWithFileTracking(ctx, runner, prompt)
+	if err != nil {
+		return nil, nil, taskID, err
+	}
+
+	// Update metrics
+	e.mu.Lock()
+	e.totalCost += result.Usage.CostUSD
+	e.taskCount++
+	e.mu.Unlock()
+
+	return result, execResult, taskID, nil
+}
+
+// runSessionWithFileTracking executes a prompt on a session while tracking file operations.
+// This is extracted to allow testing the stop-before-wait ordering with mock sessions.
+//
+// CRITICAL: The ordering here is important to avoid deadlock:
+// 1. Start session and spawn event goroutine
+// 2. Execute Ask()
+// 3. Stop session (closes events channel)
+// 4. Wait for event goroutine to finish
+//
+// If step 3 and 4 are reversed, the goroutine blocks forever on the events channel.
+func runSessionWithFileTracking(ctx context.Context, session sessionRunner, prompt string) (*claude.TurnResult, *ExecuteResult, error) {
 	// Start the session
 	if err := session.Start(ctx); err != nil {
-		return nil, nil, taskID, fmt.Errorf("failed to start session: %w", err)
+		return nil, nil, fmt.Errorf("failed to start session: %w", err)
 	}
 
 	// Track files from tool events in background
@@ -283,21 +339,17 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	// Execute the single turn
 	result, err := session.Ask(ctx, prompt)
 
-	// Stop the session first - this closes the events channel
+	// CRITICAL: Stop the session first - this closes the events channel
+	// If we wait before stopping, we deadlock because the goroutine
+	// is blocked on `for event := range events` which never closes.
 	session.Stop()
 
-	// Now wait for event processing goroutine to finish
+	// Now safe to wait for event processing goroutine to finish
 	<-eventsDone
 
 	if err != nil {
-		return nil, nil, taskID, err
+		return nil, nil, err
 	}
-
-	// Update metrics
-	e.mu.Lock()
-	e.totalCost += result.Usage.CostUSD
-	e.taskCount++
-	e.mu.Unlock()
 
 	// Safe to access file lists now - goroutine has finished
 	filesMu.Lock()
@@ -308,7 +360,7 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	}
 	filesMu.Unlock()
 
-	return result, execResult, taskID, nil
+	return result, execResult, nil
 }
 
 // BaseSessionDir returns the base directory for task recordings.

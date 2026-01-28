@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
 
 func TestNextTaskID(t *testing.T) {
@@ -135,87 +138,160 @@ func TestExecuteResultConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-// TestStopBeforeWaitOrdering verifies that we stop the session before waiting
-// for the event goroutine. This is a regression test for a deadlock where:
+// mockSessionRunner is a mock session that simulates the real session behavior
+// where Events() channel only closes when Stop() is called.
+type mockSessionRunner struct {
+	events      chan claude.Event
+	stopped     bool
+	stoppedChan chan struct{}
+	askResult   *claude.TurnResult
+	askErr      error
+}
+
+func newMockSessionRunner() *mockSessionRunner {
+	return &mockSessionRunner{
+		events:      make(chan claude.Event, 10),
+		stoppedChan: make(chan struct{}),
+		askResult: &claude.TurnResult{
+			Success: true,
+			Usage:   claude.TurnUsage{CostUSD: 0.01},
+		},
+	}
+}
+
+func (m *mockSessionRunner) Start(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockSessionRunner) Stop() error {
+	if !m.stopped {
+		m.stopped = true
+		close(m.stoppedChan)
+		close(m.events)
+	}
+	return nil
+}
+
+func (m *mockSessionRunner) Ask(ctx context.Context, prompt string) (*claude.TurnResult, error) {
+	// Simulate sending some events before returning
+	m.events <- claude.ToolCompleteEvent{
+		Name:  "Write",
+		Input: map[string]interface{}{"file_path": "/tmp/test.go"},
+	}
+	return m.askResult, m.askErr
+}
+
+func (m *mockSessionRunner) Events() <-chan claude.Event {
+	return m.events
+}
+
+// TestRunSessionWithFileTracking_StopBeforeWait verifies that runSessionWithFileTracking
+// stops the session before waiting for the event goroutine. This is a regression test
+// for a deadlock where:
 // 1. Event goroutine blocks on `for event := range session.Events()`
 // 2. Events() channel only closes when session.Stop() is called
 // 3. If we wait for the goroutine before calling Stop(), we deadlock
 //
-// This test simulates that scenario and will timeout/deadlock if the ordering
-// is wrong.
-func TestStopBeforeWaitOrdering(t *testing.T) {
-	// Simulate a session's events channel that only closes on Stop()
-	events := make(chan interface{})
-	stopped := make(chan struct{})
-	eventsDone := make(chan struct{})
+// This test uses the ACTUAL runSessionWithFileTracking function with a mock session,
+// so any change to the ordering in production code will cause this test to fail.
+func TestRunSessionWithFileTracking_StopBeforeWait(t *testing.T) {
+	mock := newMockSessionRunner()
+	ctx := context.Background()
 
-	// Simulate the event processing goroutine (like in ExecuteWithFiles)
-	go func() {
-		defer close(eventsDone)
-		for range events {
-			// Process events
-		}
-	}()
-
-	// Simulate Stop() - this closes the events channel
-	stopSession := func() {
-		close(stopped)
-		close(events)
-	}
-
-	// This is the CORRECT ordering: stop first, then wait
-	// The test will complete quickly with correct ordering
+	// Run in a goroutine with timeout to detect deadlock
 	done := make(chan struct{})
+	var result *claude.TurnResult
+	var execResult *ExecuteResult
+	var err error
+
 	go func() {
-		// Correct: Stop first (closes events channel)
-		stopSession()
-		// Then wait for goroutine
-		<-eventsDone
+		result, execResult, err = runSessionWithFileTracking(ctx, mock, "test prompt")
 		close(done)
 	}()
 
-	// If the ordering were wrong (wait before stop), this would deadlock
+	// If the ordering is wrong (wait before stop), this will timeout
 	select {
 	case <-done:
 		// Success - completed without deadlock
-	case <-time.After(1 * time.Second):
-		t.Fatal("deadlock detected: stop-before-wait ordering violated")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if execResult == nil {
+			t.Fatal("expected non-nil execResult")
+		}
+		// Verify file tracking worked
+		if len(execResult.FilesCreated) != 1 || execResult.FilesCreated[0] != "/tmp/test.go" {
+			t.Errorf("expected FilesCreated=[/tmp/test.go], got %v", execResult.FilesCreated)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("deadlock detected: runSessionWithFileTracking likely has wrong stop/wait ordering")
+	}
+
+	// Verify the session was stopped
+	if !mock.stopped {
+		t.Error("expected session to be stopped")
 	}
 }
 
-// TestStopBeforeWaitOrderingWouldDeadlock demonstrates what happens with wrong ordering.
-// This test is skipped by default but documents the deadlock scenario.
-func TestStopBeforeWaitOrderingWouldDeadlock(t *testing.T) {
-	t.Skip("This test demonstrates the deadlock - skipped to avoid hanging CI")
+// TestRunSessionWithFileTracking_TracksFiles verifies that file tracking works correctly.
+func TestRunSessionWithFileTracking_TracksFiles(t *testing.T) {
+	mock := newMockSessionRunner()
+	ctx := context.Background()
 
-	events := make(chan interface{})
-	eventsDone := make(chan struct{})
+	// Override Ask to send multiple file events
+	originalAsk := mock.askResult
+	mock.askResult = originalAsk
+	oldAsk := mock.Ask
+	_ = oldAsk // silence unused warning
 
-	go func() {
-		defer close(eventsDone)
-		for range events {
-		}
-	}()
-
-	stopSession := func() {
-		close(events)
+	// Create a custom mock that sends multiple events
+	customMock := &fileTrackingMock{
+		mockSessionRunner: newMockSessionRunner(),
 	}
 
-	// WRONG ordering: wait before stop - this WILL deadlock
-	done := make(chan struct{})
-	go func() {
-		// Wrong: Wait first (blocks forever because events never closes)
-		<-eventsDone
-		// This line is never reached
-		stopSession()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		t.Fatal("should have deadlocked")
-	case <-time.After(100 * time.Millisecond):
-		// Expected: deadlock detected
-		t.Log("confirmed: wrong ordering causes deadlock")
+	result, execResult, err := runSessionWithFileTracking(ctx, customMock, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	// Verify files were tracked
+	if len(execResult.FilesCreated) != 2 {
+		t.Errorf("expected 2 files created, got %d: %v", len(execResult.FilesCreated), execResult.FilesCreated)
+	}
+	if len(execResult.FilesModified) != 1 {
+		t.Errorf("expected 1 file modified, got %d: %v", len(execResult.FilesModified), execResult.FilesModified)
+	}
+}
+
+// fileTrackingMock sends multiple file events to test tracking.
+type fileTrackingMock struct {
+	*mockSessionRunner
+}
+
+func (m *fileTrackingMock) Ask(ctx context.Context, prompt string) (*claude.TurnResult, error) {
+	// Send multiple file events
+	m.events <- claude.ToolCompleteEvent{
+		Name:  "Write",
+		Input: map[string]interface{}{"file_path": "/tmp/new1.go"},
+	}
+	m.events <- claude.ToolCompleteEvent{
+		Name:  "Write",
+		Input: map[string]interface{}{"file_path": "/tmp/new2.go"},
+	}
+	m.events <- claude.ToolCompleteEvent{
+		Name:  "Edit",
+		Input: map[string]interface{}{"file_path": "/tmp/existing.go"},
+	}
+	// Duplicate should be ignored
+	m.events <- claude.ToolCompleteEvent{
+		Name:  "Write",
+		Input: map[string]interface{}{"file_path": "/tmp/new1.go"},
+	}
+	return m.askResult, m.askErr
 }
