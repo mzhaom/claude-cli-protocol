@@ -25,23 +25,58 @@
 package yoloplanner
 
 import (
-	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
 // readLineWithContext reads a line from stdin with context cancellation support.
+//
+// Design notes:
+// - We read directly from os.Stdin byte-by-byte instead of using bufio.Reader
+//   to avoid buffering issues where input typed during one prompt leaks into
+//   the next prompt.
+// - We use SetReadDeadline with short timeouts to make the read interruptible,
+//   allowing clean cancellation when the context is cancelled (e.g., Ctrl+C).
+// - This approach trades some efficiency (byte-by-byte vs buffered) for
+//   correctness (no input leakage) and clean shutdown (no goroutine leaks).
 func (p *PlannerWrapper) readLineWithContext(ctx context.Context) (string, error) {
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case line := <-p.inputCh:
-		return line, nil
+	var line strings.Builder
+	buf := make([]byte, 1)
+
+	for {
+		// Short deadline allows periodic context checking for clean cancellation
+		os.Stdin.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			if os.IsTimeout(err) {
+				// Timeout - check if we should stop
+				select {
+				case <-ctx.Done():
+					os.Stdin.SetReadDeadline(time.Time{}) // Clear deadline
+					return "", ctx.Err()
+				default:
+					continue // Keep waiting for input
+				}
+			}
+			os.Stdin.SetReadDeadline(time.Time{}) // Clear deadline
+			return "", err
+		}
+
+		if n > 0 {
+			if buf[0] == '\n' {
+				os.Stdin.SetReadDeadline(time.Time{}) // Clear deadline
+				return strings.TrimSpace(line.String()), nil
+			}
+			line.WriteByte(buf[0])
+		}
 	}
 }
 
@@ -118,7 +153,6 @@ func (s *SessionStats) Add(usage claude.TurnUsage) {
 type PlannerWrapper struct {
 	session  *claude.Session
 	renderer *Renderer
-	reader   *bufio.Reader
 	config   Config
 
 	// Path to the plan file written by Claude (detected from Write tool calls)
@@ -126,9 +160,6 @@ type PlannerWrapper struct {
 
 	// State tracking
 	waitingForUserInput bool // True when waiting for AskUserQuestion or ExitPlanMode response
-
-	// Channel for context-cancelable stdin reads
-	inputCh chan string
 
 	// Usage tracking
 	planningStats SessionStats // Stats for the planning phase
@@ -156,8 +187,6 @@ func NewPlannerWrapper(config Config) *PlannerWrapper {
 	return &PlannerWrapper{
 		config:   config,
 		renderer: NewRenderer(os.Stdout, config.Verbose),
-		reader:   bufio.NewReader(os.Stdin),
-		inputCh:  make(chan string),
 	}
 }
 
@@ -202,17 +231,6 @@ func (p *PlannerWrapper) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Start persistent stdin reader goroutine
-	go func() {
-		for {
-			line, err := p.reader.ReadString('\n')
-			if err != nil {
-				return // EOF or error, stop reading
-			}
-			p.inputCh <- strings.TrimSpace(line)
-		}
-	}()
-
 	// Switch to plan mode via control message (per experiments/plan_mode_analysis/ANALYSIS.md)
 	return p.session.SetPermissionMode(ctx, claude.PermissionModePlan)
 }
@@ -238,6 +256,18 @@ func (p *PlannerWrapper) Run(ctx context.Context, prompt string) error {
 			return ctx.Err()
 		case event, ok := <-p.session.Events():
 			if !ok {
+				// Channel closed - session ended
+				// In non-simple mode with build phase complete, prompt for follow-up
+				if !p.config.Simple && p.inBuildPhase {
+					done, err := p.promptForFollowUp(ctx)
+					if err != nil {
+						return err
+					}
+					if !done {
+						// User provided follow-up input, restart event loop
+						continue
+					}
+				}
 				return nil
 			}
 			done, err := p.handleEvent(ctx, event)
@@ -295,17 +325,21 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 		p.renderer.TurnSummary(e)
 
 		// Handle the plan→build transition:
-		// When pendingBuildStart is true, this TurnComplete is from the final planning turn
-		// (the one that called ExitPlanMode). We count it as planning, then switch to build phase.
+		// When pendingBuildStart is true, this TurnComplete includes both the planning
+		// turn (ExitPlanMode) and the build turn (implementation), as the model
+		// can complete everything in a single response after we approve the plan.
 		if p.pendingBuildStart {
-			// This is the final planning turn - count it as planning stats
-			p.planningStats.Add(e.Usage)
-			// Now transition to build phase for subsequent turns
+			// Count as build stats since implementation was included in this turn
+			p.buildingStats.Add(e.Usage)
 			p.inBuildPhase = true
 			p.pendingBuildStart = false
-			// Stay in the event loop - we're waiting for the build turn(s) to complete
-			// waitingForUserInput remains true (set by handleExitPlanMode)
-			return false, nil
+			p.waitingForUserInput = false
+			// In simple mode, exit cleanly
+			if p.config.Simple {
+				return true, nil
+			}
+			// In non-simple mode, prompt for follow-up
+			return p.promptForFollowUp(ctx)
 		}
 
 		// Normal stats accumulation
@@ -315,12 +349,27 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 			p.planningStats.Add(e.Usage)
 		}
 
-		// If we're not waiting for user input (AskUserQuestion/ExitPlanMode),
-		// the turn is complete and we should exit
-		if !p.waitingForUserInput {
+		// In simple mode, exit when build is done
+		if p.config.Simple && p.inBuildPhase {
 			return true, nil
 		}
-		p.waitingForUserInput = false
+
+		// If we're waiting for user input (AskUserQuestion/ExitPlanMode response),
+		// clear the flag and continue. This happens when the build turn started
+		// by executeInCurrentSession completes.
+		if p.waitingForUserInput {
+			p.waitingForUserInput = false
+			// In non-simple mode with build phase complete, prompt for follow-up
+			if p.inBuildPhase {
+				return p.promptForFollowUp(ctx)
+			}
+			// Otherwise continue the event loop
+			return false, nil
+		}
+
+		// If we're not in build phase and not waiting for user input,
+		// the turn is complete and we should exit
+		return true, nil
 
 	case claude.ErrorEvent:
 		p.renderer.Error(e.Error, e.Context)
@@ -451,6 +500,39 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 		_, err := p.session.SendMessage(ctx, msg)
 		return false, err
 	}
+}
+
+// promptForFollowUp prompts the user for follow-up input after build completion.
+// Returns (done, error). If user provides input, sends it and continues.
+// If user signals EOF (Ctrl-D) or context is cancelled, exits gracefully.
+func (p *PlannerWrapper) promptForFollowUp(ctx context.Context) (bool, error) {
+	fmt.Println()
+	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println("Build complete. Enter follow-up message or Ctrl-D to exit:")
+	fmt.Print("> ")
+
+	input, err := p.readLineWithContext(ctx)
+	if err != nil {
+		// EOF (Ctrl-D) or context cancelled - exit gracefully
+		if err == io.EOF || err == context.Canceled {
+			fmt.Println("\nExiting.")
+			return true, nil
+		}
+		return false, err
+	}
+
+	if strings.TrimSpace(input) == "" {
+		// Empty input - prompt again
+		return p.promptForFollowUp(ctx)
+	}
+
+	// Send follow-up message
+	_, err = p.session.SendMessage(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to send follow-up: %w", err)
+	}
+
+	return false, nil
 }
 
 // executeInCurrentSession switches to bypass mode and continues implementation.

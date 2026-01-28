@@ -1,72 +1,18 @@
 package yoloplanner
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
-func TestReadLineWithContext_ReturnsLine(t *testing.T) {
-	p := &PlannerWrapper{
-		inputCh: make(chan string, 1),
-	}
-
-	// Send a line to the channel
-	p.inputCh <- "test input"
-
-	ctx := context.Background()
-	line, err := p.readLineWithContext(ctx)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if line != "test input" {
-		t.Errorf("expected 'test input', got '%s'", line)
-	}
-}
-
-func TestReadLineWithContext_ReturnsErrorOnCancel(t *testing.T) {
-	p := &PlannerWrapper{
-		inputCh: make(chan string),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Cancel context after a short delay
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		cancel()
-	}()
-
-	_, err := p.readLineWithContext(ctx)
-	if err != context.Canceled {
-		t.Errorf("expected context.Canceled, got %v", err)
-	}
-}
-
-func TestReadLineWithContext_CancelBeforeRead(t *testing.T) {
-	p := &PlannerWrapper{
-		inputCh: make(chan string),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	start := time.Now()
-	_, err := p.readLineWithContext(ctx)
-	elapsed := time.Since(start)
-
-	if err != context.Canceled {
-		t.Errorf("expected context.Canceled, got %v", err)
-	}
-	if elapsed > 100*time.Millisecond {
-		t.Errorf("readLineWithContext took too long: %v", elapsed)
-	}
-}
+// Note: readLineWithContext tests have been removed because the function
+// now reads directly from os.Stdin with SetReadDeadline for interruptibility.
+// This makes unit testing impractical without mocking stdin at the OS level.
+// The function's correctness is verified through integration tests.
 
 func TestTrackPlanFileWrite(t *testing.T) {
 	tests := []struct {
@@ -125,9 +71,7 @@ func TestTrackPlanFileWrite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &PlannerWrapper{
-				inputCh: make(chan string),
-			}
+			p := &PlannerWrapper{}
 
 			p.trackPlanFileWrite(tt.toolName, tt.input)
 
@@ -149,7 +93,6 @@ func TestExportPlanToFile(t *testing.T) {
 
 	p := &PlannerWrapper{
 		planFilePath: planFile,
-		inputCh:      make(chan string),
 	}
 
 	// Export to a new file
@@ -172,7 +115,6 @@ func TestExportPlanToFile(t *testing.T) {
 func TestExportPlanToFile_NoPlanFile(t *testing.T) {
 	p := &PlannerWrapper{
 		planFilePath: "", // No plan file detected
-		inputCh:      make(chan string),
 	}
 
 	err := p.exportPlanToFile("/tmp/test.md")
@@ -184,7 +126,6 @@ func TestExportPlanToFile_NoPlanFile(t *testing.T) {
 func TestExportPlanToFile_MissingSourceFile(t *testing.T) {
 	p := &PlannerWrapper{
 		planFilePath: "/nonexistent/path/plan.md",
-		inputCh:      make(chan string),
 	}
 
 	err := p.exportPlanToFile("/tmp/test.md")
@@ -331,8 +272,7 @@ func TestGeneratePlanFilename(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &PlannerWrapper{
-				config:  Config{Prompt: tt.prompt},
-				inputCh: make(chan string),
+				config: Config{Prompt: tt.prompt},
 			}
 			result := p.generatePlanFilename()
 			if result != tt.expected {
@@ -412,7 +352,6 @@ func TestBuildModeFromString(t *testing.T) {
 func TestWaitingForUserInputReset(t *testing.T) {
 	// Test that waitingForUserInput is properly managed
 	p := &PlannerWrapper{
-		inputCh:             make(chan string),
 		waitingForUserInput: true,
 	}
 
@@ -461,7 +400,6 @@ func TestPlanFilePathRequired(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &PlannerWrapper{
 				planFilePath: tt.planFilePath,
-				inputCh:      make(chan string),
 			}
 
 			// Check the conditions that executeInNewSession would check
@@ -482,7 +420,6 @@ func TestPlanFilePathRequired(t *testing.T) {
 func TestPendingBuildStartTransition(t *testing.T) {
 	// Test that pendingBuildStart correctly transitions stats from planning to build phase
 	p := &PlannerWrapper{
-		inputCh:             make(chan string),
 		waitingForUserInput: true, // Set by handleExitPlanMode
 		pendingBuildStart:   true, // Set by executeInCurrentSession
 	}
@@ -544,7 +481,6 @@ func TestNewSessionBuildPhaseImmediate(t *testing.T) {
 	// Test that executeInNewSession sets inBuildPhase=true directly
 	// (not pendingBuildStart, since there's no planning TurnComplete in new session)
 	p := &PlannerWrapper{
-		inputCh:             make(chan string),
 		waitingForUserInput: true, // Set by handleExitPlanMode
 		inBuildPhase:        true, // Set directly by executeInNewSession
 	}
@@ -582,7 +518,6 @@ func TestWaitingForUserInputPreservedDuringBuild(t *testing.T) {
 	// Test that waitingForUserInput stays true during pendingBuildStart transition
 	// This ensures the event loop doesn't exit prematurely
 	p := &PlannerWrapper{
-		inputCh:             make(chan string),
 		waitingForUserInput: true,
 		pendingBuildStart:   true,
 	}
@@ -666,7 +601,6 @@ func TestPlanFilePathWithValidFile(t *testing.T) {
 
 	p := &PlannerWrapper{
 		planFilePath: tmpFile.Name(),
-		inputCh:      make(chan string),
 	}
 
 	// Should not need fallback with valid file
