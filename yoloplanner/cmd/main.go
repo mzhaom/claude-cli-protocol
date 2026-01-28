@@ -117,6 +117,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Print usage summary
+	planner.PrintUsageSummary()
+
 	// Print recording path
 	if path := planner.RecordingPath(); path != "" {
 		fmt.Fprintf(os.Stderr, "\nSession recorded to: %s\n", path)

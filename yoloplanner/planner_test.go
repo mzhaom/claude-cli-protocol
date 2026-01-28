@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
 )
 
@@ -475,6 +476,58 @@ func TestPlanFilePathRequired(t *testing.T) {
 				t.Errorf("expected needsFallback=%v, got %v", tt.expectFail, needsFallback)
 			}
 		})
+	}
+}
+
+func TestSessionStatsAdd(t *testing.T) {
+	stats := &SessionStats{}
+
+	// Add first turn
+	stats.Add(claude.TurnUsage{
+		InputTokens:     100,
+		OutputTokens:    50,
+		CacheReadTokens: 10,
+		CostUSD:         0.01,
+	})
+
+	if stats.TurnCount != 1 {
+		t.Errorf("expected TurnCount=1, got %d", stats.TurnCount)
+	}
+	if stats.InputTokens != 100 {
+		t.Errorf("expected InputTokens=100, got %d", stats.InputTokens)
+	}
+	if stats.OutputTokens != 50 {
+		t.Errorf("expected OutputTokens=50, got %d", stats.OutputTokens)
+	}
+	if stats.CacheReadTokens != 10 {
+		t.Errorf("expected CacheReadTokens=10, got %d", stats.CacheReadTokens)
+	}
+	if stats.CostUSD != 0.01 {
+		t.Errorf("expected CostUSD=0.01, got %f", stats.CostUSD)
+	}
+
+	// Add second turn
+	stats.Add(claude.TurnUsage{
+		InputTokens:     200,
+		OutputTokens:    100,
+		CacheReadTokens: 20,
+		CostUSD:         0.02,
+	})
+
+	if stats.TurnCount != 2 {
+		t.Errorf("expected TurnCount=2, got %d", stats.TurnCount)
+	}
+	if stats.InputTokens != 300 {
+		t.Errorf("expected InputTokens=300, got %d", stats.InputTokens)
+	}
+	if stats.OutputTokens != 150 {
+		t.Errorf("expected OutputTokens=150, got %d", stats.OutputTokens)
+	}
+	if stats.CacheReadTokens != 30 {
+		t.Errorf("expected CacheReadTokens=30, got %d", stats.CacheReadTokens)
+	}
+	if stats.CostUSD != 0.03 {
+		t.Errorf("expected CostUSD=0.03, got %f", stats.CostUSD)
 	}
 }
 

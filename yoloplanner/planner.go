@@ -96,6 +96,24 @@ type Config struct {
 	BuildMode BuildMode
 }
 
+// SessionStats tracks cumulative token usage and cost for a session phase.
+type SessionStats struct {
+	InputTokens     int
+	OutputTokens    int
+	CacheReadTokens int
+	CostUSD         float64
+	TurnCount       int
+}
+
+// Add accumulates stats from a turn.
+func (s *SessionStats) Add(usage claude.TurnUsage) {
+	s.InputTokens += usage.InputTokens
+	s.OutputTokens += usage.OutputTokens
+	s.CacheReadTokens += usage.CacheReadTokens
+	s.CostUSD += usage.CostUSD
+	s.TurnCount++
+}
+
 // PlannerWrapper wraps a claude.Session with planner-specific logic.
 type PlannerWrapper struct {
 	session  *claude.Session
@@ -111,6 +129,11 @@ type PlannerWrapper struct {
 
 	// Channel for context-cancelable stdin reads
 	inputCh chan string
+
+	// Usage tracking
+	planningStats SessionStats // Stats for the planning phase
+	buildingStats SessionStats // Stats for the building/implementation phase
+	inBuildPhase  bool         // True after transitioning from plan to build
 }
 
 // NewPlannerWrapper creates a new planner wrapper with the given configuration.
@@ -263,6 +286,12 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 
 	case claude.TurnCompleteEvent:
 		p.renderer.TurnSummary(e)
+		// Accumulate stats for the current phase
+		if p.inBuildPhase {
+			p.buildingStats.Add(e.Usage)
+		} else {
+			p.planningStats.Add(e.Usage)
+		}
 		// If we're not waiting for user input (AskUserQuestion/ExitPlanMode),
 		// the turn is complete and we should exit
 		if !p.waitingForUserInput {
@@ -410,6 +439,8 @@ func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, err
 	// We're executing, not waiting for user input. The next TurnComplete
 	// should exit the event loop.
 	p.waitingForUserInput = false
+	// Mark transition to build phase for stats tracking
+	p.inBuildPhase = true
 	_, err := p.session.SendMessage(ctx, "I approve this plan. Please proceed with implementation.")
 	return false, err
 }
@@ -463,6 +494,8 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	// We're executing, not waiting for user input. The next TurnComplete
 	// should exit the event loop.
 	p.waitingForUserInput = false
+	// Mark transition to build phase for stats tracking
+	p.inBuildPhase = true
 
 	// Don't switch to plan mode - we want to execute directly
 	msg := fmt.Sprintf("Implement the plan in %s", p.planFilePath)
@@ -562,6 +595,54 @@ func (p *PlannerWrapper) exportPlanToFile(destPath string) error {
 // PlanFilePath returns the path to the detected plan file.
 func (p *PlannerWrapper) PlanFilePath() string {
 	return p.planFilePath
+}
+
+// PrintUsageSummary prints the cumulative token usage and cost for both phases.
+func (p *PlannerWrapper) PrintUsageSummary() {
+	fmt.Println("\n" + strings.Repeat("═", 60))
+	fmt.Println("SESSION USAGE SUMMARY")
+	fmt.Println(strings.Repeat("─", 60))
+
+	// Planning phase stats
+	fmt.Println("Planning Phase:")
+	fmt.Printf("  Turns:        %d\n", p.planningStats.TurnCount)
+	fmt.Printf("  Input tokens: %d\n", p.planningStats.InputTokens)
+	fmt.Printf("  Output tokens: %d\n", p.planningStats.OutputTokens)
+	if p.planningStats.CacheReadTokens > 0 {
+		fmt.Printf("  Cache read:   %d\n", p.planningStats.CacheReadTokens)
+	}
+	fmt.Printf("  Cost:         $%.4f\n", p.planningStats.CostUSD)
+
+	// Building phase stats (only if we entered build phase)
+	if p.inBuildPhase {
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println("Building Phase:")
+		fmt.Printf("  Turns:        %d\n", p.buildingStats.TurnCount)
+		fmt.Printf("  Input tokens: %d\n", p.buildingStats.InputTokens)
+		fmt.Printf("  Output tokens: %d\n", p.buildingStats.OutputTokens)
+		if p.buildingStats.CacheReadTokens > 0 {
+			fmt.Printf("  Cache read:   %d\n", p.buildingStats.CacheReadTokens)
+		}
+		fmt.Printf("  Cost:         $%.4f\n", p.buildingStats.CostUSD)
+	}
+
+	// Total
+	fmt.Println(strings.Repeat("─", 60))
+	totalInput := p.planningStats.InputTokens + p.buildingStats.InputTokens
+	totalOutput := p.planningStats.OutputTokens + p.buildingStats.OutputTokens
+	totalCache := p.planningStats.CacheReadTokens + p.buildingStats.CacheReadTokens
+	totalCost := p.planningStats.CostUSD + p.buildingStats.CostUSD
+	totalTurns := p.planningStats.TurnCount + p.buildingStats.TurnCount
+
+	fmt.Println("TOTAL:")
+	fmt.Printf("  Turns:        %d\n", totalTurns)
+	fmt.Printf("  Input tokens: %d\n", totalInput)
+	fmt.Printf("  Output tokens: %d\n", totalOutput)
+	if totalCache > 0 {
+		fmt.Printf("  Cache read:   %d\n", totalCache)
+	}
+	fmt.Printf("  Cost:         $%.4f\n", totalCost)
+	fmt.Println(strings.Repeat("═", 60))
 }
 
 // generatePlanFilename creates a filename from the prompt.
