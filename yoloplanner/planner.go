@@ -356,7 +356,7 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 		// Handle special interactive tools
 		if e.Name == "AskUserQuestion" {
 			p.waitingForUserInput = true
-			return false, p.handleAskUserQuestion(ctx, e.Input)
+			return false, p.handleAskUserQuestion(ctx, e.ID, e.Input)
 		} else if e.Name == "ExitPlanMode" {
 			// Note: We set waitingForUserInput=true here, but if we're executing
 			// (not exporting), handleExitPlanMode will set it back to false
@@ -432,7 +432,8 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 }
 
 // handleAskUserQuestion handles the AskUserQuestion tool call.
-func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[string]interface{}) error {
+// The toolUseID is used to send the response as a proper tool_result.
+func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, toolUseID string, input map[string]interface{}) error {
 	questions, ok := input["questions"].([]interface{})
 	if !ok {
 		return fmt.Errorf("invalid AskUserQuestion input: missing questions array")
@@ -480,9 +481,9 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, input map[st
 		fmt.Printf("  [Q%d] Selected: %s\n", i+1, response)
 	}
 
-	// Format response message
+	// Format response and send as tool_result to properly associate with the tool call
 	responseMsg := formatQuestionResponses(questions, responses)
-	_, err := p.session.SendMessage(ctx, responseMsg)
+	_, err := p.session.SendToolResult(ctx, toolUseID, responseMsg)
 	return err
 }
 
