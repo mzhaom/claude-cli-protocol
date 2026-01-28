@@ -246,21 +246,21 @@ Items within a turn can be:
 - `on-request` - Approve on explicit request
 - `never` - Auto-approve everything (use with caution)
 
-## Schema Files
+## Schema Generation
 
-Full JSON Schema definitions are available in the `schemas/` directory:
+Full JSON Schema definitions can be generated with:
 
-- `schemas/v2/` - Current v2 API types (recommended)
-- `schemas/ClientRequest.json` - All client requests
-- `schemas/ServerNotification.json` - All server notifications
-
-Note: v1 APIs (`newConversation`, `sendUserMessage`, etc.) are deprecated.
-Use v2 APIs (`thread/start`, `turn/start`, etc.) for new development.
-
-Generated via:
 ```bash
 codex app-server generate-json-schema --out schemas/
 ```
+
+This produces:
+- `v2/` - Current v2 API types (recommended)
+- `ClientRequest.json` - All client requests
+- `ServerNotification.json` - All server notifications
+
+Note: v1 APIs (`newConversation`, `sendUserMessage`, etc.) are deprecated.
+Use v2 APIs (`thread/start`, `turn/start`, etc.) for new development.
 
 ## Source of Truth
 
