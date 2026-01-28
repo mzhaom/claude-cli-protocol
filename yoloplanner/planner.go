@@ -414,9 +414,14 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 			return false, nil
 		}
 
-		// If we're not in build phase and not waiting for user input,
-		// the turn is complete and we should exit
-		return true, nil
+		// Only exit if build phase is complete or in simple mode.
+		// During planning phase, continue waiting for ExitPlanMode/AskUserQuestion
+		// (this handles the "Continue refining" case where model may respond
+		// with text before calling ExitPlanMode again).
+		if p.inBuildPhase || p.config.Simple {
+			return true, nil
+		}
+		return false, nil
 
 	case claude.ErrorEvent:
 		p.renderer.Error(e.Error, e.Context)

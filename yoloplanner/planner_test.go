@@ -563,12 +563,20 @@ func TestBuildPhaseFollowUpConditions(t *testing.T) {
 			expectExit:          false,
 		},
 		{
-			name:                "not waiting for input exits",
+			name:                "planning phase continues (continue refining case)",
 			simple:              false,
 			inBuildPhase:        false,
 			waitingForUserInput: false,
 			expectFollowUp:      false,
-			expectExit:          true,
+			expectExit:          false, // Should NOT exit during planning
+		},
+		{
+			name:                "simple mode exits even during planning",
+			simple:              true,
+			inBuildPhase:        false,
+			waitingForUserInput: false,
+			expectFollowUp:      false,
+			expectExit:          true, // Simple mode always exits when not waiting
 		},
 	}
 
@@ -592,8 +600,12 @@ func TestBuildPhaseFollowUpConditions(t *testing.T) {
 				if p.inBuildPhase {
 					shouldFollowUp = true
 				}
-			} else if !p.waitingForUserInput {
-				shouldExit = true
+			} else {
+				// Not waiting for input - exit only if build complete or simple mode
+				if p.inBuildPhase || p.config.Simple {
+					shouldExit = true
+				}
+				// Otherwise continue waiting during planning phase
 			}
 
 			if shouldFollowUp != tt.expectFollowUp {
