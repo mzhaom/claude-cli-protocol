@@ -108,10 +108,12 @@ go test -v ./...
 go test -v ./agent/
 go test -v ./orchestrator/
 go test -v ./planner/
+go test -v ./subagent/
 go test -v ./subagents/designer/
 go test -v ./subagents/builder/
 go test -v ./subagents/reviewer/
 go test -v ./protocol/
+go test -v ./integration/
 ```
 
 ## Project Structure
@@ -125,11 +127,18 @@ multiagent/
 │   └── session.go          # Session management
 ├── orchestrator/           # User-facing agent
 ├── planner/                # Task coordination agent
+│   ├── planner.go          # Core planner logic
+│   └── streaming_integration.go  # StreamingPlanner with real-time events
+├── subagent/               # Streaming sub-agent protocol
+│   ├── protocol.go         # Protocol message types (Progress, FileEvent, etc.)
+│   └── streaming.go        # StreamingSubAgent implementation
 ├── subagents/
-│   ├── designer/           # Design agent
+│   ├── designer/           # Design agent (prompts, response parsing)
 │   ├── builder/            # Implementation agent
 │   └── reviewer/           # Review agent
 ├── protocol/               # Inter-agent communication types
+├── testutil/               # Mock sessions and fixtures
+├── integration/            # Integration tests including streaming tests
 └── go.mod
 ```
 

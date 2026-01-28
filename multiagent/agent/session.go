@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
@@ -207,16 +208,60 @@ func NewEphemeralSession(config AgentConfig, swarmSessionID string) *EphemeralSe
 	}
 }
 
+// ExecuteResult contains the result of an ephemeral session execution.
+type ExecuteResult struct {
+	*claude.TurnResult
+	FilesCreated  []string
+	FilesModified []string
+}
+
+// sessionRunner abstracts session operations for testing.
+// This allows injecting mock sessions to test the stop-before-wait ordering.
+type sessionRunner interface {
+	Start(ctx context.Context) error
+	Stop() error
+	Ask(ctx context.Context, prompt string) (*claude.TurnResult, error)
+	Events() <-chan claude.Event
+}
+
+// claudeSessionRunner wraps a real claude.Session.
+type claudeSessionRunner struct {
+	session *claude.Session
+}
+
+func (r *claudeSessionRunner) Start(ctx context.Context) error {
+	return r.session.Start(ctx)
+}
+
+func (r *claudeSessionRunner) Stop() error {
+	return r.session.Stop()
+}
+
+func (r *claudeSessionRunner) Ask(ctx context.Context, prompt string) (*claude.TurnResult, error) {
+	return r.session.Ask(ctx, prompt)
+}
+
+func (r *claudeSessionRunner) Events() <-chan claude.Event {
+	return r.session.Events()
+}
+
 // Execute creates a fresh session, runs the prompt, and returns the result.
 // Each call is independent - no conversation history is preserved.
 func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.TurnResult, string, error) {
+	result, _, taskID, err := e.ExecuteWithFiles(ctx, prompt)
+	return result, taskID, err
+}
+
+// ExecuteWithFiles creates a fresh session, runs the prompt, and returns the result with file tracking.
+// This method tracks Write and Edit tool calls to report which files were created/modified.
+func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) (*claude.TurnResult, *ExecuteResult, string, error) {
 	// Generate unique task directory
 	taskID := nextTaskID()
 	taskDir := filepath.Join(e.baseSessionDir, taskID)
 
 	// Ensure task directory exists
 	if err := os.MkdirAll(taskDir, 0755); err != nil {
-		return nil, "", fmt.Errorf("failed to create task directory: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to create task directory: %w", err)
 	}
 
 	// Create a fresh session for this task
@@ -228,16 +273,10 @@ func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.
 		claude.WithDisablePlugins(),
 	)
 
-	// Start the session
-	if err := session.Start(ctx); err != nil {
-		return nil, taskID, fmt.Errorf("failed to start session: %w", err)
-	}
-	defer session.Stop()
-
-	// Execute the single turn
-	result, err := session.Ask(ctx, prompt)
+	runner := &claudeSessionRunner{session: session}
+	result, execResult, err := runSessionWithFileTracking(ctx, runner, prompt)
 	if err != nil {
-		return nil, taskID, err
+		return nil, nil, taskID, err
 	}
 
 	// Update metrics
@@ -246,7 +285,100 @@ func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.
 	e.taskCount++
 	e.mu.Unlock()
 
-	return result, taskID, nil
+	return result, execResult, taskID, nil
+}
+
+// eventGoroutineTimeout is the maximum time to wait for the event processing
+// goroutine to finish after stopping the session. This provides a safety bound
+// in case Stop() fails to close the events channel.
+const eventGoroutineTimeout = 5 * time.Second
+
+// runSessionWithFileTracking executes a prompt on a session while tracking file operations.
+// This is extracted to allow testing the stop-before-wait ordering with mock sessions.
+//
+// CRITICAL: The ordering here is important to avoid deadlock:
+// 1. Start session and spawn event goroutine
+// 2. Execute Ask()
+// 3. Stop session (closes events channel)
+// 4. Wait for event goroutine to finish (with timeout)
+//
+// If step 3 and 4 are reversed, the goroutine blocks forever on the events channel.
+func runSessionWithFileTracking(ctx context.Context, session sessionRunner, prompt string) (*claude.TurnResult, *ExecuteResult, error) {
+	// Start the session
+	if err := session.Start(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to start session: %w", err)
+	}
+
+	// Track files from tool events in background
+	var filesMu sync.Mutex
+	filesCreated := make([]string, 0)
+	filesModified := make([]string, 0)
+	fileSeen := make(map[string]bool)
+	eventsDone := make(chan struct{})
+
+	go func() {
+		defer close(eventsDone)
+		events := session.Events()
+		if events == nil {
+			return
+		}
+		for event := range events {
+			if toolEvent, ok := event.(claude.ToolCompleteEvent); ok {
+				filePath, _ := toolEvent.Input["file_path"].(string)
+				if filePath != "" {
+					filesMu.Lock()
+					if !fileSeen[filePath] {
+						fileSeen[filePath] = true
+						switch toolEvent.Name {
+						case "Write":
+							filesCreated = append(filesCreated, filePath)
+						case "Edit":
+							filesModified = append(filesModified, filePath)
+						}
+					}
+					filesMu.Unlock()
+				}
+			}
+		}
+	}()
+
+	// Execute the single turn
+	result, err := session.Ask(ctx, prompt)
+
+	// CRITICAL: Stop the session first - this closes the events channel
+	// If we wait before stopping, we deadlock because the goroutine
+	// is blocked on `for event := range events` which never closes.
+	stopErr := session.Stop()
+
+	// Wait for event processing goroutine to finish with a timeout.
+	// The timeout protects against edge cases where Stop() fails to close
+	// the events channel (which would cause an unbounded wait).
+	select {
+	case <-eventsDone:
+		// Goroutine finished normally
+	case <-time.After(eventGoroutineTimeout):
+		// Timeout - goroutine may be stuck, but we can't wait forever.
+		// The file lists may be incomplete, but we avoid deadlock.
+	}
+
+	// Propagate stop error if Ask succeeded but Stop failed
+	if err == nil && stopErr != nil {
+		return nil, nil, fmt.Errorf("failed to stop session: %w", stopErr)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Safe to access file lists now - goroutine has finished (or timed out)
+	filesMu.Lock()
+	execResult := &ExecuteResult{
+		TurnResult:    result,
+		FilesCreated:  append([]string(nil), filesCreated...),
+		FilesModified: append([]string(nil), filesModified...),
+	}
+	filesMu.Unlock()
+
+	return result, execResult, nil
 }
 
 // BaseSessionDir returns the base directory for task recordings.

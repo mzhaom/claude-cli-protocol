@@ -10,6 +10,8 @@
 | Agent Configuration | `agent/config.go` | ✅ Complete | ✅ |
 | Session Management | `agent/session.go` | ✅ Complete | ✅ |
 | Protocol Types | `protocol/types.go` | ✅ Complete | ✅ |
+| Streaming Protocol | `subagent/protocol.go` | ✅ Complete | ✅ |
+| Streaming Sub-Agent | `subagent/streaming.go` | ✅ Complete | ✅ |
 
 ### Agents
 
@@ -17,6 +19,7 @@
 |-------|-------|--------|-------|
 | Orchestrator | `orchestrator/orchestrator.go`, `prompts.go` | ✅ Complete | ✅ |
 | Planner | `planner/planner.go`, `prompts.go` | ✅ Complete | ✅ |
+| StreamingPlanner | `planner/streaming_integration.go` | ✅ Complete | ✅ |
 | Designer | `subagents/designer/designer.go`, `prompts.go` | ✅ Complete | ✅ |
 | Builder | `subagents/builder/builder.go`, `prompts.go` | ✅ Complete | ✅ |
 | Reviewer | `subagents/reviewer/reviewer.go`, `prompts.go` | ✅ Complete | ✅ |
@@ -35,8 +38,10 @@
 | Component | Files | Status |
 |-----------|-------|--------|
 | Mock Sessions | `testutil/mock_session.go` | ✅ Complete |
+| Mock Streaming | `testutil/mock_streaming.go` | ✅ Complete |
 | Test Fixtures | `testutil/fixtures.go` | ✅ Complete |
 | Integration Tests | `integration/*.go` | ✅ Complete |
+| Streaming Tests | `integration/streaming_subagent_test.go` | ✅ Complete |
 | E2E Mock Tests | `e2e/*.go` | ✅ Complete |
 | Recording Tests | `recording/*.go` | ✅ Complete |
 | Lifecycle Tests | `lifecycle/*.go` | ✅ Complete |
@@ -51,19 +56,21 @@ go test -v ./...
 
 agent/               8 tests  ✅ PASS
 orchestrator/        9 tests  ✅ PASS (includes budget tests)
-planner/            10 tests  ✅ PASS (includes iteration tests)
+planner/            15 tests  ✅ PASS (includes iteration + streaming tests)
 protocol/            8 tests  ✅ PASS
+subagent/            9 tests  ✅ PASS (streaming sub-agent protocol)
 subagents/builder/   4 tests  ✅ PASS
 subagents/designer/  4 tests  ✅ PASS
 subagents/reviewer/  5 tests  ✅ PASS
-testutil/            5 tests  ✅ PASS
-integration/        15 tests  ✅ PASS
+testutil/            7 tests  ✅ PASS (includes mock streaming)
+integration/        56 tests  ✅ PASS (includes 41 streaming coordination tests)
 e2e/                 6 tests  ✅ PASS
 recording/           5 tests  ✅ PASS
 lifecycle/           5 tests  ✅ PASS
 checkpoint/         22 tests  ✅ PASS (includes live integration tests)
+progress/            8 tests  ✅ PASS
 
-TOTAL: 104+ tests
+TOTAL: 220+ tests
 ```
 
 ## Recently Implemented (Test Plan Completion)
@@ -96,8 +103,25 @@ TOTAL: 104+ tests
 ### ✅ Mock Testing Infrastructure
 - `testutil.MockLongRunningSession` for Orchestrator/Planner testing
 - `testutil.MockEphemeralSession` for Designer/Builder/Reviewer testing
+- `testutil.MockStreamingSubAgent` for streaming protocol testing
+- `testutil.MockClaudeSession` for event transformation testing
 - Pre-built response fixtures for common scenarios
 - Tests: `TestMockLongRunningSession_*`, `TestMockEphemeralSession_*`
+
+### ✅ Streaming Sub-Agent Protocol
+- `subagent.StreamingSubAgent` for real-time event streaming from sub-agents
+- Protocol message types: `Progress`, `FileEvent`, `CostUpdate`, `Result`, `Error`
+- Automatic file tracking from Write/Edit/Read tool calls
+- Cost aggregation during execution
+- Graceful cancellation support with `Cancel()` method
+- `StreamingPlanner` wrapper with `CallDesignerStreaming()`, `CallBuilderStreaming()`, `CallReviewerStreaming()`
+- Comprehensive integration tests (41 tests) covering:
+  - Happy path scenarios for all agent types
+  - Event streaming and ordering
+  - Error handling and malformed responses
+  - Cancellation (during execution, before start, idempotent)
+  - Timeout enforcement
+  - Edge cases (channel buffer full, large responses, rapid tool calls)
 
 ### ✅ Error Recovery with Checkpointing
 - `checkpoint.Checkpoint` data structure capturing session state
@@ -194,6 +218,31 @@ func (p *Planner) GetCheckpoint() *checkpoint.Checkpoint                        
 func (p *Planner) RestoreFromCheckpoint(cp *checkpoint.Checkpoint)              // ✅ NEW: Implemented (checkpointing)
 ```
 
+### StreamingPlanner (extends Planner)
+
+```go
+func NewStreamingPlanner(p *Planner) *StreamingPlanner                          // ✅ NEW: Streaming wrapper
+func (sp *StreamingPlanner) CallDesignerStreaming(ctx, req) (*DesignResponse)   // ✅ NEW: With real-time events
+func (sp *StreamingPlanner) CallBuilderStreaming(ctx, req) (*BuildResponse)     // ✅ NEW: With real-time events
+func (sp *StreamingPlanner) CallReviewerStreaming(ctx, req) (*ReviewResponse)   // ✅ NEW: With real-time events
+func (sp *StreamingPlanner) CancelSubAgent(requestID, reason string) error      // ✅ NEW: Cancel running sub-agent
+func (sp *StreamingPlanner) CancelAllSubAgents(reason string)                   // ✅ NEW: Cancel all active
+func (sp *StreamingPlanner) ActiveSubAgentCount() int                           // ✅ NEW: Count active sub-agents
+```
+
+### StreamingSubAgent (subagent package)
+
+```go
+func NewStreamingSubAgent(config, sessionID, requestID, agentType) *StreamingSubAgent  // ✅ NEW
+func (s *StreamingSubAgent) Execute(ctx, prompt string) (*Result, error)               // ✅ NEW
+func (s *StreamingSubAgent) Events() <-chan interface{}                                // ✅ NEW: Progress/FileEvent/CostUpdate
+func (s *StreamingSubAgent) Cancel(reason string)                                      // ✅ NEW: Graceful cancellation
+func (s *StreamingSubAgent) IsCancelled() bool                                         // ✅ NEW
+func (s *StreamingSubAgent) TotalCost() float64                                        // ✅ NEW
+func (s *StreamingSubAgent) FilesCreated() []string                                    // ✅ NEW: Auto-tracked
+func (s *StreamingSubAgent) FilesModified() []string                                   // ✅ NEW: Auto-tracked
+```
+
 ### Sub-Agents
 
 ```go
@@ -242,17 +291,24 @@ multiagent/
 ├── agent/           # Core agent interfaces and session management
 ├── orchestrator/    # User-facing orchestrator with budget enforcement
 ├── planner/         # Task coordinator with iteration limits
+│   ├── planner.go             # Core planner logic
+│   ├── streaming_integration.go  # StreamingPlanner with real-time events
+│   └── mcp_tools.go           # MCP tool implementations
+├── subagent/        # Streaming sub-agent protocol (NEW)
+│   ├── protocol.go            # Message types: Progress, FileEvent, CostUpdate, etc.
+│   └── streaming.go           # StreamingSubAgent implementation
 ├── protocol/        # Inter-agent communication types
 ├── subagents/
-│   ├── designer/    # Design specialist
+│   ├── designer/    # Design specialist (prompts, response parsing)
 │   ├── builder/     # Implementation specialist
 │   └── reviewer/    # Code review specialist
-├── testutil/        # Mock sessions and test fixtures
-├── integration/     # Component integration tests
+├── testutil/        # Mock sessions, streaming mocks, and test fixtures
+├── integration/     # Component integration tests (including streaming)
 ├── e2e/             # End-to-end mock tests
 ├── recording/       # Session recording verification tests
 ├── lifecycle/       # Session lifecycle tests
 ├── checkpoint/      # Error recovery with checkpointing
+├── progress/        # Progress reporting infrastructure
 ├── logging/         # Logging utilities
 ├── cmd/swarm/       # CLI entry point
 ├── ARCHITECTURE.md  # System design documentation
