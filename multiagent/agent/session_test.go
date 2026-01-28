@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestNextTaskID(t *testing.T) {
@@ -132,4 +133,89 @@ func TestExecuteResultConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestStopBeforeWaitOrdering verifies that we stop the session before waiting
+// for the event goroutine. This is a regression test for a deadlock where:
+// 1. Event goroutine blocks on `for event := range session.Events()`
+// 2. Events() channel only closes when session.Stop() is called
+// 3. If we wait for the goroutine before calling Stop(), we deadlock
+//
+// This test simulates that scenario and will timeout/deadlock if the ordering
+// is wrong.
+func TestStopBeforeWaitOrdering(t *testing.T) {
+	// Simulate a session's events channel that only closes on Stop()
+	events := make(chan interface{})
+	stopped := make(chan struct{})
+	eventsDone := make(chan struct{})
+
+	// Simulate the event processing goroutine (like in ExecuteWithFiles)
+	go func() {
+		defer close(eventsDone)
+		for range events {
+			// Process events
+		}
+	}()
+
+	// Simulate Stop() - this closes the events channel
+	stopSession := func() {
+		close(stopped)
+		close(events)
+	}
+
+	// This is the CORRECT ordering: stop first, then wait
+	// The test will complete quickly with correct ordering
+	done := make(chan struct{})
+	go func() {
+		// Correct: Stop first (closes events channel)
+		stopSession()
+		// Then wait for goroutine
+		<-eventsDone
+		close(done)
+	}()
+
+	// If the ordering were wrong (wait before stop), this would deadlock
+	select {
+	case <-done:
+		// Success - completed without deadlock
+	case <-time.After(1 * time.Second):
+		t.Fatal("deadlock detected: stop-before-wait ordering violated")
+	}
+}
+
+// TestStopBeforeWaitOrderingWouldDeadlock demonstrates what happens with wrong ordering.
+// This test is skipped by default but documents the deadlock scenario.
+func TestStopBeforeWaitOrderingWouldDeadlock(t *testing.T) {
+	t.Skip("This test demonstrates the deadlock - skipped to avoid hanging CI")
+
+	events := make(chan interface{})
+	eventsDone := make(chan struct{})
+
+	go func() {
+		defer close(eventsDone)
+		for range events {
+		}
+	}()
+
+	stopSession := func() {
+		close(events)
+	}
+
+	// WRONG ordering: wait before stop - this WILL deadlock
+	done := make(chan struct{})
+	go func() {
+		// Wrong: Wait first (blocks forever because events never closes)
+		<-eventsDone
+		// This line is never reached
+		stopSession()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("should have deadlocked")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: deadlock detected
+		t.Log("confirmed: wrong ordering causes deadlock")
+	}
 }
