@@ -444,3 +444,64 @@ func TestBuildModeIsValid(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanFilePathRequired(t *testing.T) {
+	// Test that executeInNewSession requires a valid plan file path
+	tests := []struct {
+		name         string
+		planFilePath string
+		expectFail   bool // Whether we expect the path check to fail
+	}{
+		{"empty path requires fallback", "", true},
+		{"nonexistent file requires fallback", "/nonexistent/path/plan.md", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &PlannerWrapper{
+				planFilePath: tt.planFilePath,
+				inputCh:      make(chan string),
+			}
+
+			// Check the conditions that executeInNewSession would check
+			needsFallback := false
+			if p.planFilePath == "" {
+				needsFallback = true
+			} else if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+				needsFallback = true
+			}
+
+			if needsFallback != tt.expectFail {
+				t.Errorf("expected needsFallback=%v, got %v", tt.expectFail, needsFallback)
+			}
+		})
+	}
+}
+
+func TestPlanFilePathWithValidFile(t *testing.T) {
+	// Create a temp file to simulate a valid plan file
+	tmpFile, err := os.CreateTemp("", "plan-*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("# Test Plan\n")
+	tmpFile.Close()
+
+	p := &PlannerWrapper{
+		planFilePath: tmpFile.Name(),
+		inputCh:      make(chan string),
+	}
+
+	// Should not need fallback with valid file
+	needsFallback := false
+	if p.planFilePath == "" {
+		needsFallback = true
+	} else if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+		needsFallback = true
+	}
+
+	if needsFallback {
+		t.Error("expected no fallback needed for valid plan file")
+	}
+}

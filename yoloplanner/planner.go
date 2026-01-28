@@ -415,7 +415,20 @@ func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, err
 }
 
 // executeInNewSession stops current session and starts fresh to implement the plan.
+// Requires a plan file to exist; falls back to current session if no plan file.
 func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) {
+	// Check if plan file exists - new session needs a file to reference
+	if p.planFilePath == "" {
+		fmt.Println("\n⚠ No plan file detected. Falling back to current session execution...")
+		return p.executeInCurrentSession(ctx)
+	}
+
+	// Verify the plan file actually exists on disk
+	if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+		fmt.Printf("\n⚠ Plan file %s not found. Falling back to current session execution...\n", p.planFilePath)
+		return p.executeInCurrentSession(ctx)
+	}
+
 	fmt.Println("\n→ Starting new session to implement plan...")
 
 	// Note: There's no control message for "/clear" in the protocol.
