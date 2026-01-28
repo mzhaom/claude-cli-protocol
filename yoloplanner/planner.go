@@ -44,9 +44,20 @@ import (
 //   the next prompt.
 // - We use SetReadDeadline with short timeouts to make the read interruptible,
 //   allowing clean cancellation when the context is cancelled (e.g., Ctrl+C).
+// - If SetReadDeadline isn't supported (e.g., pipes), we fall back to a goroutine
+//   approach with potential leak on cancellation.
 // - This approach trades some efficiency (byte-by-byte vs buffered) for
 //   correctness (no input leakage) and clean shutdown (no goroutine leaks).
 func (p *PlannerWrapper) readLineWithContext(ctx context.Context) (string, error) {
+	// Try to set deadline to test if it's supported
+	testErr := os.Stdin.SetReadDeadline(time.Now().Add(time.Millisecond))
+	os.Stdin.SetReadDeadline(time.Time{}) // Clear test deadline
+
+	if testErr != nil {
+		// Deadlines not supported - fall back to goroutine approach
+		return p.readLineWithGoroutine(ctx)
+	}
+
 	var line strings.Builder
 	buf := make([]byte, 1)
 
@@ -77,6 +88,42 @@ func (p *PlannerWrapper) readLineWithContext(ctx context.Context) (string, error
 			}
 			line.WriteByte(buf[0])
 		}
+	}
+}
+
+// readLineWithGoroutine reads a line using a goroutine when deadlines aren't supported.
+// Note: If context is cancelled, the goroutine may leak until stdin receives input.
+func (p *PlannerWrapper) readLineWithGoroutine(ctx context.Context) (string, error) {
+	type result struct {
+		line string
+		err  error
+	}
+	ch := make(chan result, 1)
+
+	go func() {
+		var line strings.Builder
+		buf := make([]byte, 1)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				ch <- result{"", err}
+				return
+			}
+			if n > 0 {
+				if buf[0] == '\n' {
+					ch <- result{strings.TrimSpace(line.String()), nil}
+					return
+				}
+				line.WriteByte(buf[0])
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case r := <-ch:
+		return r.line, r.err
 	}
 }
 
@@ -325,11 +372,11 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 		p.renderer.TurnSummary(e)
 
 		// Handle the plan→build transition:
-		// When pendingBuildStart is true, this TurnComplete includes both the planning
-		// turn (ExitPlanMode) and the build turn (implementation), as the model
-		// can complete everything in a single response after we approve the plan.
+		// When pendingBuildStart is true, this TurnComplete is from the turn that
+		// started after we sent "I approve this plan". The model typically completes
+		// ALL the build work in this single response, so we should prompt for follow-up.
 		if p.pendingBuildStart {
-			// Count as build stats since implementation was included in this turn
+			// Count as build stats since implementation work is in this turn
 			p.buildingStats.Add(e.Usage)
 			p.inBuildPhase = true
 			p.pendingBuildStart = false

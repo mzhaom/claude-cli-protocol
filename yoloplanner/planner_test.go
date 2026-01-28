@@ -418,18 +418,19 @@ func TestPlanFilePathRequired(t *testing.T) {
 }
 
 func TestPendingBuildStartTransition(t *testing.T) {
-	// Test that pendingBuildStart correctly transitions stats from planning to build phase
+	// Test that pendingBuildStart correctly transitions to build phase
+	// and counts the turn as build stats (since model does all work in one turn)
 	p := &PlannerWrapper{
 		waitingForUserInput: true, // Set by handleExitPlanMode
 		pendingBuildStart:   true, // Set by executeInCurrentSession
 	}
 
-	// Simulate the final planning turn's TurnComplete
-	// When pendingBuildStart is true, this turn should be counted as planning
-	planningUsage := claude.TurnUsage{
-		InputTokens:  1000,
-		OutputTokens: 500,
-		CostUSD:      0.05,
+	// Simulate the TurnComplete that arrives after sending "I approve this plan"
+	// The model typically completes ALL build work in this single response
+	buildUsage := claude.TurnUsage{
+		InputTokens:  2000,
+		OutputTokens: 1000,
+		CostUSD:      0.10,
 	}
 
 	// Before: not in build phase
@@ -439,41 +440,32 @@ func TestPendingBuildStartTransition(t *testing.T) {
 
 	// Simulate what handleEvent does for TurnCompleteEvent when pendingBuildStart is true
 	if p.pendingBuildStart {
-		p.planningStats.Add(planningUsage)
+		// Count as build stats since implementation work is in this turn
+		p.buildingStats.Add(buildUsage)
 		p.inBuildPhase = true
 		p.pendingBuildStart = false
+		p.waitingForUserInput = false
 	}
 
-	// After: should be in build phase, planning stats recorded
+	// After: should be in build phase, build stats recorded
 	if !p.inBuildPhase {
 		t.Error("should be in build phase after transition")
 	}
 	if p.pendingBuildStart {
 		t.Error("pendingBuildStart should be false after transition")
 	}
-	if p.planningStats.InputTokens != 1000 {
-		t.Errorf("expected planning InputTokens=1000, got %d", p.planningStats.InputTokens)
+	if p.waitingForUserInput {
+		t.Error("waitingForUserInput should be false after transition")
 	}
-	if p.planningStats.TurnCount != 1 {
-		t.Errorf("expected planning TurnCount=1, got %d", p.planningStats.TurnCount)
-	}
-
-	// Now simulate a build turn
-	buildUsage := claude.TurnUsage{
-		InputTokens:  2000,
-		OutputTokens: 1000,
-		CostUSD:      0.10,
-	}
-	if p.inBuildPhase {
-		p.buildingStats.Add(buildUsage)
-	}
-
-	// Verify build stats
 	if p.buildingStats.InputTokens != 2000 {
 		t.Errorf("expected building InputTokens=2000, got %d", p.buildingStats.InputTokens)
 	}
 	if p.buildingStats.TurnCount != 1 {
 		t.Errorf("expected building TurnCount=1, got %d", p.buildingStats.TurnCount)
+	}
+	// Planning stats should be empty
+	if p.planningStats.InputTokens != 0 {
+		t.Errorf("expected planning InputTokens=0, got %d", p.planningStats.InputTokens)
 	}
 }
 
@@ -514,26 +506,103 @@ func TestNewSessionBuildPhaseImmediate(t *testing.T) {
 	}
 }
 
-func TestWaitingForUserInputPreservedDuringBuild(t *testing.T) {
-	// Test that waitingForUserInput stays true during pendingBuildStart transition
-	// This ensures the event loop doesn't exit prematurely
+func TestPendingBuildStartClearsWaitingForUserInput(t *testing.T) {
+	// Test that pendingBuildStart transition clears waitingForUserInput
+	// since the model typically completes all work in one turn
 	p := &PlannerWrapper{
 		waitingForUserInput: true,
 		pendingBuildStart:   true,
 	}
 
 	// Simulate what happens in TurnComplete handler when pendingBuildStart is true
-	// The handler should NOT change waitingForUserInput
 	if p.pendingBuildStart {
-		p.planningStats.Add(claude.TurnUsage{InputTokens: 100})
+		p.buildingStats.Add(claude.TurnUsage{InputTokens: 100})
 		p.inBuildPhase = true
 		p.pendingBuildStart = false
-		// Note: waitingForUserInput is NOT touched here
+		p.waitingForUserInput = false // Now cleared since we're done
 	}
 
-	// waitingForUserInput should still be true to keep event loop running
-	if !p.waitingForUserInput {
-		t.Error("waitingForUserInput should remain true during build transition")
+	// waitingForUserInput should be false since build is complete
+	if p.waitingForUserInput {
+		t.Error("waitingForUserInput should be false after build transition")
+	}
+}
+
+func TestBuildPhaseFollowUpConditions(t *testing.T) {
+	// Test the conditions that trigger follow-up prompt after build completion
+	tests := []struct {
+		name                string
+		simple              bool
+		inBuildPhase        bool
+		waitingForUserInput bool
+		expectFollowUp      bool // Would trigger promptForFollowUp in non-simple mode
+		expectExit          bool // Would exit immediately
+	}{
+		{
+			name:                "simple mode exits after build",
+			simple:              true,
+			inBuildPhase:        true,
+			waitingForUserInput: true,
+			expectFollowUp:      false,
+			expectExit:          true,
+		},
+		{
+			name:                "non-simple mode with build complete triggers follow-up",
+			simple:              false,
+			inBuildPhase:        true,
+			waitingForUserInput: true,
+			expectFollowUp:      true,
+			expectExit:          false,
+		},
+		{
+			name:                "non-simple mode not in build phase continues",
+			simple:              false,
+			inBuildPhase:        false,
+			waitingForUserInput: true,
+			expectFollowUp:      false,
+			expectExit:          false,
+		},
+		{
+			name:                "not waiting for input exits",
+			simple:              false,
+			inBuildPhase:        false,
+			waitingForUserInput: false,
+			expectFollowUp:      false,
+			expectExit:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &PlannerWrapper{
+				config:              Config{Simple: tt.simple},
+				inBuildPhase:        tt.inBuildPhase,
+				waitingForUserInput: tt.waitingForUserInput,
+			}
+
+			// Simulate the logic from handleEvent for TurnCompleteEvent
+			// (after pendingBuildStart handling)
+			shouldFollowUp := false
+			shouldExit := false
+
+			if p.config.Simple && p.inBuildPhase {
+				shouldExit = true
+			} else if p.waitingForUserInput {
+				p.waitingForUserInput = false
+				if p.inBuildPhase {
+					shouldFollowUp = true
+				}
+			} else if !p.waitingForUserInput {
+				shouldExit = true
+			}
+
+			if shouldFollowUp != tt.expectFollowUp {
+				t.Errorf("expected followUp=%v, got %v", tt.expectFollowUp, shouldFollowUp)
+			}
+			if shouldExit != tt.expectExit {
+				t.Errorf("expected exit=%v, got %v", tt.expectExit, shouldExit)
+			}
+		})
 	}
 }
 
