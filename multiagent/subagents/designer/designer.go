@@ -56,6 +56,11 @@ func (d *Designer) Execute(ctx context.Context, prompt string) (*claude.TurnResu
 	return d.session.Execute(ctx, prompt)
 }
 
+// ExecuteWithFiles runs a design task and returns the result with file tracking.
+func (d *Designer) ExecuteWithFiles(ctx context.Context, prompt string) (*claude.TurnResult, *agent.ExecuteResult, string, error) {
+	return d.session.ExecuteWithFiles(ctx, prompt)
+}
+
 // Design creates a technical design for the given request.
 func (d *Designer) Design(ctx context.Context, req *protocol.DesignRequest) (*protocol.DesignResponse, string, error) {
 	// Format the prompt
@@ -144,6 +149,14 @@ func ParseDesignResponse(text string) (*protocol.DesignResponse, error) {
 
 // extractJSON attempts to extract JSON from a string that might contain markdown.
 func extractJSON(text string) string {
+	// Check for <design_json> tag first (from MCP tool responses)
+	if idx := strings.Index(text, "<design_json>"); idx != -1 {
+		start := idx + len("<design_json>")
+		if end := strings.Index(text[start:], "</design_json>"); end != -1 {
+			return strings.TrimSpace(text[start : start+end])
+		}
+	}
+
 	// Check if the text contains a JSON code block
 	if idx := strings.Index(text, "```json"); idx != -1 {
 		start := idx + 7

@@ -56,6 +56,11 @@ func (r *Reviewer) Execute(ctx context.Context, prompt string) (*claude.TurnResu
 	return r.session.Execute(ctx, prompt)
 }
 
+// ExecuteWithFiles runs a review task and returns the result with file tracking.
+func (r *Reviewer) ExecuteWithFiles(ctx context.Context, prompt string) (*claude.TurnResult, *agent.ExecuteResult, string, error) {
+	return r.session.ExecuteWithFiles(ctx, prompt)
+}
+
 // Review analyzes code changes and provides feedback.
 func (r *Reviewer) Review(ctx context.Context, req *protocol.ReviewRequest) (*protocol.ReviewResponse, string, error) {
 	prompt := formatReviewPrompt(req)
@@ -136,6 +141,14 @@ func ParseReviewResponse(text string) (*protocol.ReviewResponse, error) {
 
 // extractJSON attempts to extract JSON from a string that might contain markdown.
 func extractJSON(text string) string {
+	// Check for <review_json> tag first (from MCP tool responses)
+	if idx := strings.Index(text, "<review_json>"); idx != -1 {
+		start := idx + len("<review_json>")
+		if end := strings.Index(text[start:], "</review_json>"); end != -1 {
+			return strings.TrimSpace(text[start : start+end])
+		}
+	}
+
 	// Check if the text contains a JSON code block
 	if idx := strings.Index(text, "```json"); idx != -1 {
 		start := idx + 7

@@ -75,7 +75,7 @@ result, err := o.plannerSession.WaitForTurn(ctx)
 
 This allows multi-turn conversations with accumulated context.
 
-### Ephemeral Agent Communication
+### Ephemeral Agent Communication (Basic)
 
 Designer, Builder, Reviewer use `Ask()` for single-turn request-response:
 
@@ -87,6 +87,28 @@ result, err := designer.Execute(ctx, formatDesignPrompt(req))
 ```
 
 Each task gets a fresh session with no context pollution.
+
+### Streaming Sub-Agent Communication (Advanced)
+
+For real-time progress, file tracking, and cancellation support, use `StreamingPlanner`:
+
+```go
+// Create StreamingPlanner wrapper
+sp := planner.NewStreamingPlanner(p)
+
+// Call sub-agents with streaming events
+result, err := sp.CallDesignerStreaming(ctx, designReq)
+
+// Events are forwarded to progress reporter in background
+// Files created/modified are tracked automatically
+// Cost is aggregated during execution
+```
+
+The streaming protocol uses Go channels for in-process communication:
+- `Progress` events: phase changes, text streaming, tool calls
+- `FileEvent` events: automatic tracking of Write/Edit/Read tool calls
+- `CostUpdate` events: per-turn and cumulative cost tracking
+- `Result`: final outcome with parsed response and tracked state
 
 ## Session Types
 
@@ -187,6 +209,56 @@ type Issue struct {
     Line       int    `json:"line,omitempty"`
     Message    string `json:"message"`
     Suggestion string `json:"suggestion,omitempty"`
+}
+```
+
+### Streaming Sub-Agent Protocol (subagent package)
+
+The `subagent` package provides real-time event streaming from sub-agents:
+
+```go
+// Progress event - phase changes and text streaming
+type Progress struct {
+    Phase       string // "thinking", "tool_call", "streaming"
+    TextDelta   string // Incremental text
+    FullText    string // Accumulated text
+    ToolName    string // Current tool being called
+    ToolID      string // Tool invocation ID
+    ToolInput   map[string]interface{}
+    ToolStarted bool   // true=started, false=completed
+}
+
+// FileEvent - automatic file operation tracking
+type FileEvent struct {
+    RequestID string
+    AgentType AgentType
+    Path      string     // File path
+    Action    FileAction // "create", "modify", "read"
+    ToolName  string     // Write, Edit, or Read
+}
+
+// CostUpdate - per-turn cost tracking
+type CostUpdate struct {
+    RequestID    string
+    AgentType    AgentType
+    TurnCostUSD  float64
+    TotalCostUSD float64
+    InputTokens  int
+    OutputTokens int
+}
+
+// Result - final execution result
+type Result struct {
+    Success       bool
+    Text          string                    // Full response text
+    Error         string
+    Design        *protocol.DesignResponse  // Parsed (if designer)
+    Build         *protocol.BuildResponse   // Parsed (if builder)
+    Review        *protocol.ReviewResponse  // Parsed (if reviewer)
+    FilesCreated  []string
+    FilesModified []string
+    TotalCostUSD  float64
+    DurationMs    int64
 }
 ```
 

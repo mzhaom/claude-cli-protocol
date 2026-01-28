@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/internal/ndjson"
@@ -197,14 +198,15 @@ func (pm *processManager) Stop() error {
 	// Graceful shutdown sequence: stdin close -> wait 500ms -> SIGTERM -> wait 500ms -> SIGKILL
 	select {
 	case <-done:
-		// Process exited cleanly
+		// Process exited cleanly after stdin close
 		return nil
 	case <-time.After(500 * time.Millisecond):
 		// Process didn't exit, send SIGTERM
 	}
 
 	if pm.cmd.Process != nil {
-		pm.cmd.Process.Kill()
+		// Send SIGTERM for graceful shutdown
+		_ = pm.cmd.Process.Signal(syscall.SIGTERM)
 	}
 
 	// Wait for process to exit after SIGTERM
@@ -212,7 +214,18 @@ func (pm *processManager) Stop() error {
 	case <-done:
 		return nil
 	case <-time.After(500 * time.Millisecond):
-		// Force kill if still running (already killed above on most systems)
+		// Process didn't respond to SIGTERM, force kill
+	}
+
+	if pm.cmd.Process != nil {
+		// Force kill with SIGKILL
+		_ = pm.cmd.Process.Kill()
+	}
+
+	// Wait briefly for kill to take effect
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
 	}
 
 	return nil
