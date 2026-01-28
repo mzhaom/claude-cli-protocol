@@ -1,0 +1,9 @@
+# Build artifacts
+coverage.out
+coverage.html
+
+# Example binaries
+examples/basic/basic
+examples/streaming/streaming
+examples/codex_basic/codex_basic
+codex_basic
