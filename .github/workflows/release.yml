@@ -50,19 +50,23 @@ jobs:
           cd tools/sessionplayer
           go build -o sessionplayer${{ steps.ext.outputs.ext }} ./cmd
 
-      - name: Create archives (Unix)
+      - name: Create archive (Unix)
         if: matrix.goos != 'windows'
         run: |
           VERSION=${{ github.event.release.tag_name }}
-          tar -czvf yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C yoloplanner yoloplanner
-          tar -czvf sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C tools/sessionplayer sessionplayer
+          mkdir -p dist
+          cp yoloplanner/yoloplanner dist/
+          cp tools/sessionplayer/sessionplayer dist/
+          tar -czvf claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C dist .
 
-      - name: Create archives (Windows)
+      - name: Create archive (Windows)
         if: matrix.goos == 'windows'
         run: |
           VERSION=${{ github.event.release.tag_name }}
-          cd yoloplanner && zip ../yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip yoloplanner.exe && cd ..
-          cd tools/sessionplayer && zip ../../sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip sessionplayer.exe && cd ../..
+          mkdir -p dist
+          cp yoloplanner/yoloplanner.exe dist/
+          cp tools/sessionplayer/sessionplayer.exe dist/
+          cd dist && zip ../claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip * && cd ..
 
       - name: Upload release assets
         env:
@@ -70,9 +74,7 @@ jobs:
         run: |
           VERSION=${{ github.event.release.tag_name }}
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            gh release upload ${VERSION} yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
-            gh release upload ${VERSION} sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+            gh release upload ${VERSION} claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
           else
-            gh release upload ${VERSION} yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-            gh release upload ${VERSION} sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            gh release upload ${VERSION} claude-cli-tools-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
           fi
