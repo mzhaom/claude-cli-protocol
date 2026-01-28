@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Set binary extension
+        id: ext
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            echo "ext=.exe" >> $GITHUB_OUTPUT
+          else
+            echo "ext=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build yoloplanner
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          cd yoloplanner
+          go build -o yoloplanner${{ steps.ext.outputs.ext }} ./cmd
+
+      - name: Build sessionplayer
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          cd tools/sessionplayer
+          go build -o sessionplayer${{ steps.ext.outputs.ext }} ./cmd
+
+      - name: Create archives (Unix)
+        if: matrix.goos != 'windows'
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          tar -czvf yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C yoloplanner yoloplanner
+          tar -czvf sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz -C tools/sessionplayer sessionplayer
+
+      - name: Create archives (Windows)
+        if: matrix.goos == 'windows'
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          cd yoloplanner && zip ../yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip yoloplanner.exe && cd ..
+          cd tools/sessionplayer && zip ../../sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip sessionplayer.exe && cd ../..
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            gh release upload ${VERSION} yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+            gh release upload ${VERSION} sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          else
+            gh release upload ${VERSION} yoloplanner-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            gh release upload ${VERSION} sessionplayer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          fi
