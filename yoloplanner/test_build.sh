@@ -8,9 +8,19 @@ cd "$SCRIPT_DIR"
 go build -o yoloplanner ./cmd
 YOLOPLANNER="$SCRIPT_DIR/yoloplanner"
 
+# Parse arguments
+BUILD_MODE="${1:-current}"
+if [[ "$BUILD_MODE" != "current" && "$BUILD_MODE" != "new" ]]; then
+    echo "Usage: $0 [current|new]"
+    echo "  current - Execute in current session (keeps context)"
+    echo "  new     - Execute in new session (fresh start)"
+    exit 1
+fi
+
 # Create temp directory
 TMPDIR=$(mktemp -d)
 echo "Testing in: $TMPDIR"
+echo "Build mode: $BUILD_MODE"
 
 # Create a half-implemented Python calculator
 cat > "$TMPDIR/calculator.py" << 'EOF'
@@ -41,15 +51,18 @@ def test_subtract():
 # TODO: add tests for multiply and divide
 EOF
 
-echo "=== Testing --simple --build=current ==="
+echo ""
+echo "=== Testing --simple --build=$BUILD_MODE ==="
 cd "$TMPDIR"
 # Use a vague prompt - let plan mode research what's needed
-"$YOLOPLANNER" --simple --build=current "finish implementing the calculator"
+"$YOLOPLANNER" --simple --build="$BUILD_MODE" "finish implementing the calculator"
 
 echo ""
 echo "=== Checking results ==="
+echo "--- calculator.py ---"
 cat "$TMPDIR/calculator.py"
 echo ""
+echo "--- test_calculator.py ---"
 cat "$TMPDIR/test_calculator.py"
 
 # Run the tests
