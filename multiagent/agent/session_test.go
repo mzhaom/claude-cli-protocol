@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -93,4 +94,42 @@ func TestLongRunningSessionNotStarted(t *testing.T) {
 	if session.Events() != nil {
 		t.Error("Events() should be nil before start")
 	}
+}
+
+func TestExecuteResult(t *testing.T) {
+	result := &ExecuteResult{
+		FilesCreated:  []string{"/tmp/a.go", "/tmp/b.go"},
+		FilesModified: []string{"/tmp/c.go"},
+	}
+
+	if len(result.FilesCreated) != 2 {
+		t.Errorf("expected 2 files created, got %d", len(result.FilesCreated))
+	}
+	if len(result.FilesModified) != 1 {
+		t.Errorf("expected 1 file modified, got %d", len(result.FilesModified))
+	}
+}
+
+func TestExecuteResultConcurrentAccess(t *testing.T) {
+	// Test that ExecuteResult can be safely accessed from multiple goroutines
+	result := &ExecuteResult{
+		FilesCreated:  []string{"/tmp/a.go", "/tmp/b.go"},
+		FilesModified: []string{"/tmp/c.go"},
+	}
+
+	var wg sync.WaitGroup
+	const numGoroutines = 100
+
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			// Read access should be safe
+			_ = result.FilesCreated
+			_ = result.FilesModified
+			_ = len(result.FilesCreated)
+			_ = len(result.FilesModified)
+		}()
+	}
+	wg.Wait()
 }

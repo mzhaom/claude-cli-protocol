@@ -1,6 +1,8 @@
 package subagent
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -211,5 +213,117 @@ func TestStreamingSubAgent_TrackFileOperation_UnknownTool(t *testing.T) {
 		t.Error("unexpected event for unknown tool")
 	case <-time.After(50 * time.Millisecond):
 		// Expected
+	}
+}
+
+func TestStreamingSubAgent_EmitAfterClose(t *testing.T) {
+	config := agent.AgentConfig{Model: "sonnet"}
+	sub := NewStreamingSubAgent(config, "session-1", "req-1", AgentTypeBuilder)
+
+	// Close eventsDone (simulating goroutine finished) then close events
+	close(sub.eventsDone)
+	sub.closeEventsDirect()
+
+	// emitEvent after close should not panic
+	sub.emitEvent(NewProgress("req-1", AgentTypeBuilder, PhaseStreaming))
+	sub.emitError("test", "test error", false)
+
+	// Multiple close calls should not panic
+	sub.closeEventsDirect()
+	sub.closeEventsDirect()
+}
+
+func TestStreamingSubAgent_CancelAfterClose(t *testing.T) {
+	config := agent.AgentConfig{Model: "sonnet"}
+	sub := NewStreamingSubAgent(config, "session-1", "req-1", AgentTypeBuilder)
+
+	// Close eventsDone and events first
+	close(sub.eventsDone)
+	sub.closeEventsDirect()
+
+	// Cancel after close should not panic (event won't be sent)
+	sub.Cancel("late cancel")
+
+	// Should still be marked as cancelled
+	if !sub.IsCancelled() {
+		t.Error("expected sub-agent to be cancelled")
+	}
+}
+
+func TestStreamingSubAgent_ConcurrentEmit(t *testing.T) {
+	config := agent.AgentConfig{Model: "sonnet"}
+	sub := NewStreamingSubAgent(config, "session-1", "req-1", AgentTypeBuilder)
+
+	// Start consumer
+	done := make(chan struct{})
+	eventCount := 0
+	go func() {
+		defer close(done)
+		for range sub.Events() {
+			eventCount++
+		}
+	}()
+
+	// Concurrent emits from multiple goroutines
+	const numGoroutines = 10
+	const eventsPerGoroutine = 100
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < eventsPerGoroutine; j++ {
+				sub.emitEvent(NewProgress("req-1", AgentTypeBuilder, PhaseStreaming))
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Close events and wait for consumer
+	close(sub.eventsDone)
+	sub.closeEventsDirect()
+	<-done
+
+	// Some events may be dropped if channel is full, but no panics
+	if eventCount == 0 {
+		t.Error("expected at least some events to be received")
+	}
+}
+
+func TestStreamingSubAgent_ConcurrentFileTracking(t *testing.T) {
+	config := agent.AgentConfig{Model: "sonnet"}
+	sub := NewStreamingSubAgent(config, "session-1", "req-1", AgentTypeBuilder)
+
+	// Start consumer
+	go func() {
+		for range sub.Events() {
+		}
+	}()
+
+	// Concurrent file tracking from multiple goroutines
+	const numGoroutines = 10
+	const filesPerGoroutine = 50
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		goroutineID := i
+		go func() {
+			defer wg.Done()
+			for j := 0; j < filesPerGoroutine; j++ {
+				path := fmt.Sprintf("/tmp/file_%d_%d.go", goroutineID, j)
+				sub.trackFileOperation("Write", map[string]interface{}{"file_path": path})
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Close events
+	close(sub.eventsDone)
+	sub.closeEventsDirect()
+
+	// Verify all files were tracked (may have some duplicates if paths collide)
+	created := sub.FilesCreated()
+	if len(created) != numGoroutines*filesPerGoroutine {
+		t.Errorf("expected %d files created, got %d", numGoroutines*filesPerGoroutine, len(created))
 	}
 }

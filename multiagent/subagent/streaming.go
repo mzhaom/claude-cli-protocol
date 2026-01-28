@@ -14,19 +14,20 @@ import (
 // It transforms Claude SDK events into protocol events and tracks file operations,
 // costs, and accumulated text automatically.
 type StreamingSubAgent struct {
-	config     agent.AgentConfig
-	sessionID  string
-	requestID  string
-	agentType  AgentType
+	config    agent.AgentConfig
+	sessionID string
+	requestID string
+	agentType AgentType
 
 	// Event streaming
 	events     chan interface{}
-	eventsDone chan struct{}
+	eventsDone chan struct{} // closed when processClaudeEvents goroutine exits
 
-	// Cancellation support
-	mu         sync.Mutex
-	cancelled  bool
-	cancelFunc context.CancelFunc
+	// Cancellation and close state
+	mu           sync.Mutex
+	cancelled    bool
+	eventsClosed bool
+	cancelFunc   context.CancelFunc
 
 	// Tracked state
 	filesCreated  []string
@@ -118,7 +119,9 @@ func (s *StreamingSubAgent) Execute(ctx context.Context, prompt string) (*Result
 
 	if err := session.Start(ctx); err != nil {
 		s.emitError("session_start_failed", err.Error(), true)
-		s.closeEvents()
+		// No goroutine started yet, mark eventsDone as complete and close
+		close(s.eventsDone)
+		s.closeEventsDirect()
 		return nil, fmt.Errorf("failed to start session: %w", err)
 	}
 	defer session.Stop()
@@ -130,7 +133,9 @@ func (s *StreamingSubAgent) Execute(ctx context.Context, prompt string) (*Result
 	result, err := session.Ask(ctx, prompt)
 	if err != nil {
 		s.emitError("execution_failed", err.Error(), true)
-		s.closeEvents()
+		// Wait for the goroutine to finish before closing events
+		<-s.eventsDone
+		s.closeEventsDirect()
 		return nil, fmt.Errorf("execution failed: %w", err)
 	}
 
@@ -141,9 +146,9 @@ func (s *StreamingSubAgent) Execute(ctx context.Context, prompt string) (*Result
 	durationMs := time.Since(startTime).Milliseconds()
 	finalResult := s.buildResult(result, durationMs)
 
-	// Emit final result
+	// Emit final result and close
 	s.emitEvent(finalResult)
-	s.closeEvents()
+	s.closeEventsDirect()
 
 	return finalResult, nil
 }
@@ -298,12 +303,18 @@ func (s *StreamingSubAgent) emitEvent(event interface{}) {
 }
 
 // emitEventLocked sends an event while holding the lock.
-func (s *StreamingSubAgent) emitEventLocked(event interface{}) {
+// Returns false if the channel is closed.
+func (s *StreamingSubAgent) emitEventLocked(event interface{}) bool {
+	if s.eventsClosed {
+		return false
+	}
 	select {
 	case s.events <- event:
+		return true
 	default:
 		// Channel full, drop event
 		// In a production system, we might want to log this
+		return true
 	}
 }
 
@@ -312,9 +323,15 @@ func (s *StreamingSubAgent) emitError(code, message string, retryable bool) {
 	s.emitEvent(NewError(s.requestID, s.agentType, code, message, retryable))
 }
 
-// closeEvents closes the events channel.
-func (s *StreamingSubAgent) closeEvents() {
-	close(s.events)
+// closeEventsDirect closes the events channel safely without waiting.
+// Caller must ensure no goroutines are still emitting events.
+func (s *StreamingSubAgent) closeEventsDirect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.eventsClosed {
+		s.eventsClosed = true
+		close(s.events)
+	}
 }
 
 // RequestID returns the request ID.

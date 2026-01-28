@@ -249,11 +249,14 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	defer session.Stop()
 
 	// Track files from tool events in background
+	var filesMu sync.Mutex
 	filesCreated := make([]string, 0)
 	filesModified := make([]string, 0)
 	fileSeen := make(map[string]bool)
+	eventsDone := make(chan struct{})
 
 	go func() {
+		defer close(eventsDone)
 		events := session.Events()
 		if events == nil {
 			return
@@ -261,14 +264,18 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 		for event := range events {
 			if toolEvent, ok := event.(claude.ToolCompleteEvent); ok {
 				filePath, _ := toolEvent.Input["file_path"].(string)
-				if filePath != "" && !fileSeen[filePath] {
-					fileSeen[filePath] = true
-					switch toolEvent.Name {
-					case "Write":
-						filesCreated = append(filesCreated, filePath)
-					case "Edit":
-						filesModified = append(filesModified, filePath)
+				if filePath != "" {
+					filesMu.Lock()
+					if !fileSeen[filePath] {
+						fileSeen[filePath] = true
+						switch toolEvent.Name {
+						case "Write":
+							filesCreated = append(filesCreated, filePath)
+						case "Edit":
+							filesModified = append(filesModified, filePath)
+						}
 					}
+					filesMu.Unlock()
 				}
 			}
 		}
@@ -276,6 +283,10 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 
 	// Execute the single turn
 	result, err := session.Ask(ctx, prompt)
+
+	// Wait for event processing to complete before accessing file lists
+	<-eventsDone
+
 	if err != nil {
 		return nil, nil, taskID, err
 	}
@@ -286,11 +297,14 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	e.taskCount++
 	e.mu.Unlock()
 
+	// Safe to access file lists now - goroutine has finished
+	filesMu.Lock()
 	execResult := &ExecuteResult{
 		TurnResult:    result,
-		FilesCreated:  filesCreated,
-		FilesModified: filesModified,
+		FilesCreated:  append([]string(nil), filesCreated...),
+		FilesModified: append([]string(nil), filesModified...),
 	}
+	filesMu.Unlock()
 
 	return result, execResult, taskID, nil
 }
