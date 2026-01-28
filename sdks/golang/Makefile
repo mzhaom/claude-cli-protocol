@@ -1,71 +1,68 @@
-.PHONY: all build test test-unit test-integration lint fmt vet clean help
+.PHONY: all build test clean examples run-examples run-codex-basic run-basic run-streaming
 
 # Default target
-all: lint build test-unit
+all: build test
 
 # Build all packages
 build:
 	go build ./...
 
-# Run all tests (unit only, no integration)
-test: test-unit
-
-# Run unit tests
-test-unit:
+# Run all tests
+test:
 	go test ./... -v
-
-# Run integration tests (requires claude CLI)
-test-integration:
-	go test -tags=integration ./claude/... -v
-
-# Run all tests including integration
-test-all: test-unit test-integration
-
-# Lint the code
-lint: fmt vet
-	@echo "Lint passed"
-
-# Format code
-fmt:
-	gofmt -w .
-	@if [ -n "$$(gofmt -l .)" ]; then \
-		echo "Code not formatted. Run 'make fmt' to fix."; \
-		gofmt -l .; \
-		exit 1; \
-	fi
-
-# Vet code for suspicious constructs
-vet:
-	go vet ./...
-
-# Run tests with race detector
-test-race:
-	go test -race ./...
 
 # Run tests with coverage
 test-coverage:
-	go test -coverprofile=coverage.out ./...
+	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
+
+# Build examples
+examples: examples/codex_basic/codex_basic examples/basic/basic examples/streaming/streaming
+
+examples/codex_basic/codex_basic: examples/codex_basic/main.go
+	go build -o $@ ./examples/codex_basic
+
+examples/basic/basic: examples/basic/main.go
+	go build -o $@ ./examples/basic
+
+examples/streaming/streaming: examples/streaming/main.go
+	go build -o $@ ./examples/streaming
 
 # Clean build artifacts
 clean:
+	rm -f examples/codex_basic/codex_basic
+	rm -f examples/basic/basic
+	rm -f examples/streaming/streaming
 	rm -f coverage.out coverage.html
-	go clean ./...
 
-# Show help
-help:
-	@echo "Available targets:"
-	@echo "  all              - Run lint, build, and unit tests (default)"
-	@echo "  build            - Build all packages"
-	@echo "  test             - Run unit tests"
-	@echo "  test-unit        - Run unit tests"
-	@echo "  test-integration - Run integration tests (requires claude CLI)"
-	@echo "  test-all         - Run both unit and integration tests"
-	@echo "  test-race        - Run tests with race detector"
-	@echo "  test-coverage    - Run tests with coverage report"
-	@echo "  lint             - Run fmt and vet"
-	@echo "  fmt              - Format code with gofmt"
-	@echo "  vet              - Run go vet"
-	@echo "  clean            - Clean build artifacts"
-	@echo "  help             - Show this help"
+# Run all examples (codex only - claude examples require claude CLI)
+run-examples: run-codex-basic
+	@echo ""
+	@echo "=== All examples completed successfully ==="
+
+# Run codex basic example (uses codex app-server)
+run-codex-basic: examples/codex_basic/codex_basic
+	@echo "=== Running Codex Basic Example ==="
+	./examples/codex_basic/codex_basic
+
+# Run claude basic example (requires claude CLI)
+run-basic: examples/basic/basic
+	@echo "=== Running Claude Basic Example ==="
+	./examples/basic/basic
+
+# Run claude streaming example (requires claude CLI)
+run-streaming: examples/streaming/streaming
+	@echo "=== Running Claude Streaming Example ==="
+	./examples/streaming/streaming
+
+# Lint (requires golangci-lint)
+lint:
+	golangci-lint run ./...
+
+# Format code
+fmt:
+	go fmt ./...
+
+# Check for issues
+vet:
+	go vet ./...
