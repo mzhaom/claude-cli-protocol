@@ -134,6 +134,13 @@ type PlannerWrapper struct {
 	planningStats SessionStats // Stats for the planning phase
 	buildingStats SessionStats // Stats for the building/implementation phase
 	inBuildPhase  bool         // True after transitioning from plan to build
+
+	// Build execution state
+	// When we start executing (current or new session), we set pendingBuildStart=true.
+	// The next TurnComplete (from the planning turn) will see this, finalize planning stats,
+	// then set inBuildPhase=true. Subsequent TurnCompletes accumulate build stats.
+	// We keep waitingForUserInput=true until the build turn completes.
+	pendingBuildStart bool
 }
 
 // NewPlannerWrapper creates a new planner wrapper with the given configuration.
@@ -286,12 +293,28 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 
 	case claude.TurnCompleteEvent:
 		p.renderer.TurnSummary(e)
-		// Accumulate stats for the current phase
+
+		// Handle the plan→build transition:
+		// When pendingBuildStart is true, this TurnComplete is from the final planning turn
+		// (the one that called ExitPlanMode). We count it as planning, then switch to build phase.
+		if p.pendingBuildStart {
+			// This is the final planning turn - count it as planning stats
+			p.planningStats.Add(e.Usage)
+			// Now transition to build phase for subsequent turns
+			p.inBuildPhase = true
+			p.pendingBuildStart = false
+			// Stay in the event loop - we're waiting for the build turn(s) to complete
+			// waitingForUserInput remains true (set by handleExitPlanMode)
+			return false, nil
+		}
+
+		// Normal stats accumulation
 		if p.inBuildPhase {
 			p.buildingStats.Add(e.Usage)
 		} else {
 			p.planningStats.Add(e.Usage)
 		}
+
 		// If we're not waiting for user input (AskUserQuestion/ExitPlanMode),
 		// the turn is complete and we should exit
 		if !p.waitingForUserInput {
@@ -436,11 +459,12 @@ func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, err
 	if err := p.session.SetPermissionMode(ctx, claude.PermissionModeBypass); err != nil {
 		return false, fmt.Errorf("failed to switch permission mode: %w", err)
 	}
-	// We're executing, not waiting for user input. The next TurnComplete
-	// should exit the event loop.
-	p.waitingForUserInput = false
-	// Mark transition to build phase for stats tracking
-	p.inBuildPhase = true
+	// Signal that we're starting build execution.
+	// The next TurnComplete (from the planning turn that called ExitPlanMode) will:
+	// 1. Count that turn's stats as planning
+	// 2. Set inBuildPhase=true for subsequent turns
+	// waitingForUserInput stays true (set by handleExitPlanMode) so we don't exit early.
+	p.pendingBuildStart = true
 	_, err := p.session.SendMessage(ctx, "I approve this plan. Please proceed with implementation.")
 	return false, err
 }
@@ -482,6 +506,9 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	if p.config.WorkDir != "" {
 		newOpts = append(newOpts, claude.WithWorkDir(p.config.WorkDir))
 	}
+	if p.config.SystemPrompt != "" {
+		newOpts = append(newOpts, claude.WithSystemPrompt(p.config.SystemPrompt))
+	}
 
 	p.session = claude.NewSession(newOpts...)
 	if err := p.session.Start(ctx); err != nil {
@@ -491,11 +518,13 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	// Log that we're starting implementation in a new session
 	p.renderer.Status(fmt.Sprintf("Implementation session started, using plan: %s", p.planFilePath))
 
-	// We're executing, not waiting for user input. The next TurnComplete
-	// should exit the event loop.
-	p.waitingForUserInput = false
-	// Mark transition to build phase for stats tracking
+	// For new session, we transition to build phase immediately since this is a fresh session.
+	// Note: The final planning turn's TurnComplete event (with stats) won't arrive because
+	// we stopped the old session. This means the final planning turn's stats are lost.
+	// This is an acceptable tradeoff for getting a fresh context in the new session.
 	p.inBuildPhase = true
+	// Keep waitingForUserInput=true (set by handleExitPlanMode) so the event loop continues.
+	// It will be set to false by the TurnComplete handler when the build turn completes.
 
 	// Don't switch to plan mode - we want to execute directly
 	msg := fmt.Sprintf("Implement the plan in %s", p.planFilePath)

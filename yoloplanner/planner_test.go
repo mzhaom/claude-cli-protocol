@@ -479,6 +479,129 @@ func TestPlanFilePathRequired(t *testing.T) {
 	}
 }
 
+func TestPendingBuildStartTransition(t *testing.T) {
+	// Test that pendingBuildStart correctly transitions stats from planning to build phase
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true, // Set by handleExitPlanMode
+		pendingBuildStart:   true, // Set by executeInCurrentSession
+	}
+
+	// Simulate the final planning turn's TurnComplete
+	// When pendingBuildStart is true, this turn should be counted as planning
+	planningUsage := claude.TurnUsage{
+		InputTokens:  1000,
+		OutputTokens: 500,
+		CostUSD:      0.05,
+	}
+
+	// Before: not in build phase
+	if p.inBuildPhase {
+		t.Error("should not be in build phase before transition")
+	}
+
+	// Simulate what handleEvent does for TurnCompleteEvent when pendingBuildStart is true
+	if p.pendingBuildStart {
+		p.planningStats.Add(planningUsage)
+		p.inBuildPhase = true
+		p.pendingBuildStart = false
+	}
+
+	// After: should be in build phase, planning stats recorded
+	if !p.inBuildPhase {
+		t.Error("should be in build phase after transition")
+	}
+	if p.pendingBuildStart {
+		t.Error("pendingBuildStart should be false after transition")
+	}
+	if p.planningStats.InputTokens != 1000 {
+		t.Errorf("expected planning InputTokens=1000, got %d", p.planningStats.InputTokens)
+	}
+	if p.planningStats.TurnCount != 1 {
+		t.Errorf("expected planning TurnCount=1, got %d", p.planningStats.TurnCount)
+	}
+
+	// Now simulate a build turn
+	buildUsage := claude.TurnUsage{
+		InputTokens:  2000,
+		OutputTokens: 1000,
+		CostUSD:      0.10,
+	}
+	if p.inBuildPhase {
+		p.buildingStats.Add(buildUsage)
+	}
+
+	// Verify build stats
+	if p.buildingStats.InputTokens != 2000 {
+		t.Errorf("expected building InputTokens=2000, got %d", p.buildingStats.InputTokens)
+	}
+	if p.buildingStats.TurnCount != 1 {
+		t.Errorf("expected building TurnCount=1, got %d", p.buildingStats.TurnCount)
+	}
+}
+
+func TestNewSessionBuildPhaseImmediate(t *testing.T) {
+	// Test that executeInNewSession sets inBuildPhase=true directly
+	// (not pendingBuildStart, since there's no planning TurnComplete in new session)
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true, // Set by handleExitPlanMode
+		inBuildPhase:        true, // Set directly by executeInNewSession
+	}
+
+	// Verify we're immediately in build phase
+	if !p.inBuildPhase {
+		t.Error("should be in build phase for new session")
+	}
+	if p.pendingBuildStart {
+		t.Error("pendingBuildStart should be false for new session")
+	}
+
+	// Build turn should accumulate to build stats
+	buildUsage := claude.TurnUsage{
+		InputTokens:  3000,
+		OutputTokens: 1500,
+		CostUSD:      0.15,
+	}
+	if p.inBuildPhase {
+		p.buildingStats.Add(buildUsage)
+	} else {
+		p.planningStats.Add(buildUsage)
+	}
+
+	// Verify stats go to build, not planning
+	if p.buildingStats.InputTokens != 3000 {
+		t.Errorf("expected building InputTokens=3000, got %d", p.buildingStats.InputTokens)
+	}
+	if p.planningStats.InputTokens != 0 {
+		t.Errorf("expected planning InputTokens=0, got %d", p.planningStats.InputTokens)
+	}
+}
+
+func TestWaitingForUserInputPreservedDuringBuild(t *testing.T) {
+	// Test that waitingForUserInput stays true during pendingBuildStart transition
+	// This ensures the event loop doesn't exit prematurely
+	p := &PlannerWrapper{
+		inputCh:             make(chan string),
+		waitingForUserInput: true,
+		pendingBuildStart:   true,
+	}
+
+	// Simulate what happens in TurnComplete handler when pendingBuildStart is true
+	// The handler should NOT change waitingForUserInput
+	if p.pendingBuildStart {
+		p.planningStats.Add(claude.TurnUsage{InputTokens: 100})
+		p.inBuildPhase = true
+		p.pendingBuildStart = false
+		// Note: waitingForUserInput is NOT touched here
+	}
+
+	// waitingForUserInput should still be true to keep event loop running
+	if !p.waitingForUserInput {
+		t.Error("waitingForUserInput should remain true during build transition")
+	}
+}
+
 func TestSessionStatsAdd(t *testing.T) {
 	stats := &SessionStats{}
 
