@@ -56,6 +56,11 @@ func (b *Builder) Execute(ctx context.Context, prompt string) (*claude.TurnResul
 	return b.session.Execute(ctx, prompt)
 }
 
+// ExecuteWithFiles runs a build task and returns the result with file tracking.
+func (b *Builder) ExecuteWithFiles(ctx context.Context, prompt string) (*claude.TurnResult, *agent.ExecuteResult, string, error) {
+	return b.session.ExecuteWithFiles(ctx, prompt)
+}
+
 // Build implements code based on the given request.
 func (b *Builder) Build(ctx context.Context, req *protocol.BuildRequest) (*protocol.BuildResponse, string, error) {
 	prompt := formatBuildPrompt(req)
@@ -150,6 +155,14 @@ func ParseBuildResponse(text string) (*protocol.BuildResponse, error) {
 
 // extractJSON attempts to extract JSON from a string that might contain markdown.
 func extractJSON(text string) string {
+	// Check for <build_json> tag first (from MCP tool responses)
+	if idx := strings.Index(text, "<build_json>"); idx != -1 {
+		start := idx + len("<build_json>")
+		if end := strings.Index(text[start:], "</build_json>"); end != -1 {
+			return strings.TrimSpace(text[start : start+end])
+		}
+	}
+
 	// Check if the text contains a JSON code block
 	if idx := strings.Index(text, "```json"); idx != -1 {
 		start := idx + 7

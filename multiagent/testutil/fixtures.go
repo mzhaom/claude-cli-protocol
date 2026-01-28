@@ -1,6 +1,12 @@
 package testutil
 
-import "github.com/mzhaom/claude-cli-protocol/multiagent/protocol"
+import (
+	"time"
+
+	"github.com/mzhaom/claude-cli-protocol/multiagent/protocol"
+	"github.com/mzhaom/claude-cli-protocol/multiagent/subagent"
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
+)
 
 // Sample design response JSON for testing
 const SampleDesignResponseJSON = `{
@@ -118,4 +124,168 @@ func FailureIterationMockResponses() []MockResponse {
 		{Text: SampleBuildResponseJSON, Cost: 0.02, Success: true},       // Re-build
 		{Text: SampleReviewResponsePassJSON, Cost: 0.005, Success: true}, // Pass
 	}
+}
+
+// NewSampleProgressEvents returns sample Progress events for testing.
+func NewSampleProgressEvents() []subagent.Progress {
+	now := time.Now()
+	return []subagent.Progress{
+		{
+			Type:      subagent.MessageTypeProgress,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeDesigner,
+			Timestamp: now,
+			Phase:     subagent.PhaseThinking,
+			Message:   "Analyzing requirements",
+		},
+		{
+			Type:      subagent.MessageTypeProgress,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeDesigner,
+			Timestamp: now.Add(100 * time.Millisecond),
+			Phase:     subagent.PhaseToolCall,
+			ToolName:  "Read",
+			ToolID:    "tool-1",
+			ToolStarted: true,
+		},
+		{
+			Type:      subagent.MessageTypeProgress,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeDesigner,
+			Timestamp: now.Add(200 * time.Millisecond),
+			Phase:     subagent.PhaseStreaming,
+			TextDelta: "Here is the design...",
+			FullText:  "Here is the design...",
+		},
+	}
+}
+
+// NewSampleFileEvents returns sample FileEvent events for testing.
+func NewSampleFileEvents() []subagent.FileEvent {
+	now := time.Now()
+	return []subagent.FileEvent{
+		{
+			Type:      subagent.MessageTypeFileEvent,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeBuilder,
+			Timestamp: now,
+			Path:      "/tmp/main.go",
+			Action:    subagent.FileActionCreate,
+			ToolName:  "Write",
+		},
+		{
+			Type:      subagent.MessageTypeFileEvent,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeBuilder,
+			Timestamp: now.Add(100 * time.Millisecond),
+			Path:      "/tmp/hello/hello.go",
+			Action:    subagent.FileActionCreate,
+			ToolName:  "Write",
+		},
+		{
+			Type:      subagent.MessageTypeFileEvent,
+			RequestID: "req-1",
+			Agent:     subagent.AgentTypeBuilder,
+			Timestamp: now.Add(200 * time.Millisecond),
+			Path:      "/tmp/main.go",
+			Action:    subagent.FileActionModify,
+			ToolName:  "Edit",
+		},
+	}
+}
+
+// NewSampleClaudeEvents returns sample Claude SDK events for testing.
+func NewSampleClaudeEvents() []claude.Event {
+	now := time.Now()
+	return []claude.Event{
+		claude.ThinkingEvent{
+			TurnNumber:   1,
+			Thinking:     "Let me analyze this...",
+			FullThinking: "Let me analyze this...",
+		},
+		claude.ToolStartEvent{
+			TurnNumber: 1,
+			ID:         "tool-1",
+			Name:       "Read",
+			Timestamp:  now,
+		},
+		claude.ToolCompleteEvent{
+			TurnNumber: 1,
+			ID:         "tool-1",
+			Name:       "Read",
+			Input:      map[string]interface{}{"file_path": "/tmp/test.go"},
+			Timestamp:  now.Add(50 * time.Millisecond),
+		},
+		claude.TextEvent{
+			TurnNumber: 1,
+			Text:       "Based on my analysis...",
+			FullText:   "Based on my analysis...",
+		},
+		claude.TurnCompleteEvent{
+			TurnNumber: 1,
+			Success:    true,
+			DurationMs: 1500,
+			Usage: claude.TurnUsage{
+				InputTokens:  100,
+				OutputTokens: 200,
+				CostUSD:      0.01,
+			},
+		},
+	}
+}
+
+// NewSampleDesignResult returns a sample Result for a designer sub-agent.
+func NewSampleDesignResult() *subagent.Result {
+	return &subagent.Result{
+		Type:          subagent.MessageTypeResult,
+		RequestID:     "req-1",
+		Agent:         subagent.AgentTypeDesigner,
+		Timestamp:     time.Now(),
+		Success:       true,
+		Text:          SampleDesignResponseJSON,
+		Design:        NewSampleDesignResponse(),
+		FilesCreated:  []string{},
+		FilesModified: []string{},
+		TotalCostUSD:  0.01,
+		DurationMs:    1500,
+	}
+}
+
+// NewSampleBuildResult returns a sample Result for a builder sub-agent.
+func NewSampleBuildResult() *subagent.Result {
+	return &subagent.Result{
+		Type:          subagent.MessageTypeResult,
+		RequestID:     "req-2",
+		Agent:         subagent.AgentTypeBuilder,
+		Timestamp:     time.Now(),
+		Success:       true,
+		Text:          SampleBuildResponseJSON,
+		Build:         NewSampleBuildResponse(),
+		FilesCreated:  []string{"main.go", "hello/hello.go"},
+		FilesModified: []string{},
+		TotalCostUSD:  0.02,
+		DurationMs:    3000,
+	}
+}
+
+// NewSampleReviewResult returns a sample Result for a reviewer sub-agent.
+func NewSampleReviewResult() *subagent.Result {
+	return &subagent.Result{
+		Type:          subagent.MessageTypeResult,
+		RequestID:     "req-3",
+		Agent:         subagent.AgentTypeReviewer,
+		Timestamp:     time.Now(),
+		Success:       true,
+		Text:          SampleReviewResponsePassJSON,
+		Review:        NewSampleReviewResponsePass(),
+		FilesCreated:  []string{},
+		FilesModified: []string{},
+		TotalCostUSD:  0.005,
+		DurationMs:    1000,
+	}
+}
+
+// NewSampleCostUpdate returns a sample CostUpdate event.
+func NewSampleCostUpdate() *subagent.CostUpdate {
+	return subagent.NewCostUpdate("req-1", subagent.AgentTypeDesigner, 0.01, 0.01, 100, 200)
 }

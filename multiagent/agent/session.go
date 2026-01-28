@@ -207,16 +207,30 @@ func NewEphemeralSession(config AgentConfig, swarmSessionID string) *EphemeralSe
 	}
 }
 
+// ExecuteResult contains the result of an ephemeral session execution.
+type ExecuteResult struct {
+	*claude.TurnResult
+	FilesCreated  []string
+	FilesModified []string
+}
+
 // Execute creates a fresh session, runs the prompt, and returns the result.
 // Each call is independent - no conversation history is preserved.
 func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.TurnResult, string, error) {
+	result, _, taskID, err := e.ExecuteWithFiles(ctx, prompt)
+	return result, taskID, err
+}
+
+// ExecuteWithFiles creates a fresh session, runs the prompt, and returns the result with file tracking.
+// This method tracks Write and Edit tool calls to report which files were created/modified.
+func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) (*claude.TurnResult, *ExecuteResult, string, error) {
 	// Generate unique task directory
 	taskID := nextTaskID()
 	taskDir := filepath.Join(e.baseSessionDir, taskID)
 
 	// Ensure task directory exists
 	if err := os.MkdirAll(taskDir, 0755); err != nil {
-		return nil, "", fmt.Errorf("failed to create task directory: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to create task directory: %w", err)
 	}
 
 	// Create a fresh session for this task
@@ -230,14 +244,40 @@ func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.
 
 	// Start the session
 	if err := session.Start(ctx); err != nil {
-		return nil, taskID, fmt.Errorf("failed to start session: %w", err)
+		return nil, nil, taskID, fmt.Errorf("failed to start session: %w", err)
 	}
 	defer session.Stop()
+
+	// Track files from tool events in background
+	filesCreated := make([]string, 0)
+	filesModified := make([]string, 0)
+	fileSeen := make(map[string]bool)
+
+	go func() {
+		events := session.Events()
+		if events == nil {
+			return
+		}
+		for event := range events {
+			if toolEvent, ok := event.(claude.ToolCompleteEvent); ok {
+				filePath, _ := toolEvent.Input["file_path"].(string)
+				if filePath != "" && !fileSeen[filePath] {
+					fileSeen[filePath] = true
+					switch toolEvent.Name {
+					case "Write":
+						filesCreated = append(filesCreated, filePath)
+					case "Edit":
+						filesModified = append(filesModified, filePath)
+					}
+				}
+			}
+		}
+	}()
 
 	// Execute the single turn
 	result, err := session.Ask(ctx, prompt)
 	if err != nil {
-		return nil, taskID, err
+		return nil, nil, taskID, err
 	}
 
 	// Update metrics
@@ -246,7 +286,13 @@ func (e *EphemeralSession) Execute(ctx context.Context, prompt string) (*claude.
 	e.taskCount++
 	e.mu.Unlock()
 
-	return result, taskID, nil
+	execResult := &ExecuteResult{
+		TurnResult:    result,
+		FilesCreated:  filesCreated,
+		FilesModified: filesModified,
+	}
+
+	return result, execResult, taskID, nil
 }
 
 // BaseSessionDir returns the base directory for task recordings.

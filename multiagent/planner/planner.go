@@ -260,7 +260,7 @@ func (p *Planner) CallDesigner(ctx context.Context, req *protocol.DesignRequest)
 	d := designer.New(p.designerConfig, p.swarmSessionID)
 
 	prompt := formatDesignPrompt(req)
-	result, taskID, err := d.Execute(ctx, prompt)
+	result, execResult, taskID, err := d.ExecuteWithFiles(ctx, prompt)
 
 	// Increment iteration count after the call
 	p.incrementIterations()
@@ -302,9 +302,24 @@ func (p *Planner) CallDesigner(ctx context.Context, req *protocol.DesignRequest)
 		p.progress.Event(progress.NewAgentCompleteEvent(agent.RoleDesigner, taskID, true, cost, duration, nil))
 	}
 
-	// Note: In a full implementation, we'd collect the text from events
-	// and parse it here. For now, return empty response.
-	response := &protocol.DesignResponse{}
+	// Parse the design response from the result text
+	// Note: Sub-agents often respond conversationally while using tools to create files.
+	// JSON parsing may fail, which is fine - we track files via tool events instead.
+	var response *protocol.DesignResponse
+	if result.Text != "" {
+		response, _ = designer.ParseDesignResponse(result.Text)
+	}
+	if response == nil {
+		response = &protocol.DesignResponse{}
+	}
+
+	// Track files from execution (Designer might create files directly)
+	if execResult != nil {
+		p.mu.Lock()
+		p.filesCreated = append(p.filesCreated, execResult.FilesCreated...)
+		p.filesModified = append(p.filesModified, execResult.FilesModified...)
+		p.mu.Unlock()
+	}
 
 	// Checkpoint: design completed successfully
 	if p.checkpointMgr != nil {
@@ -346,7 +361,7 @@ func (p *Planner) CallBuilder(ctx context.Context, req *protocol.BuildRequest) (
 	b := builder.New(p.builderConfig, p.swarmSessionID)
 
 	prompt := formatBuildPrompt(req)
-	result, taskID, err := b.Execute(ctx, prompt)
+	result, execResult, taskID, err := b.ExecuteWithFiles(ctx, prompt)
 
 	// Increment iteration count after the call
 	p.incrementIterations()
@@ -387,7 +402,21 @@ func (p *Planner) CallBuilder(ctx context.Context, req *protocol.BuildRequest) (
 		p.progress.Event(progress.NewAgentCompleteEvent(agent.RoleBuilder, taskID, true, cost, duration, nil))
 	}
 
-	response := &protocol.BuildResponse{}
+	// Build response from file tracking (more reliable than JSON parsing)
+	var response *protocol.BuildResponse
+	if execResult != nil {
+		response = &protocol.BuildResponse{
+			FilesCreated:  execResult.FilesCreated,
+			FilesModified: execResult.FilesModified,
+		}
+		// Also update planner's file tracking
+		p.mu.Lock()
+		p.filesCreated = append(p.filesCreated, execResult.FilesCreated...)
+		p.filesModified = append(p.filesModified, execResult.FilesModified...)
+		p.mu.Unlock()
+	} else {
+		response = &protocol.BuildResponse{}
+	}
 
 	// Checkpoint: build completed successfully
 	if p.checkpointMgr != nil {
@@ -429,7 +458,7 @@ func (p *Planner) CallReviewer(ctx context.Context, req *protocol.ReviewRequest)
 	r := reviewer.New(p.reviewerConfig, p.swarmSessionID)
 
 	prompt := formatReviewPrompt(req)
-	result, taskID, err := r.Execute(ctx, prompt)
+	result, execResult, taskID, err := r.ExecuteWithFiles(ctx, prompt)
 
 	// Increment iteration count after the call
 	p.incrementIterations()
@@ -470,7 +499,24 @@ func (p *Planner) CallReviewer(ctx context.Context, req *protocol.ReviewRequest)
 		p.progress.Event(progress.NewAgentCompleteEvent(agent.RoleReviewer, taskID, true, cost, duration, nil))
 	}
 
-	response := &protocol.ReviewResponse{}
+	// Track files from execution result (reviewers typically don't create files, but track anyway)
+	if execResult != nil {
+		p.mu.Lock()
+		p.filesCreated = append(p.filesCreated, execResult.FilesCreated...)
+		p.filesModified = append(p.filesModified, execResult.FilesModified...)
+		p.mu.Unlock()
+	}
+
+	// Parse the review response from the result text
+	// Note: Sub-agents often respond conversationally. JSON parsing may fail,
+	// which is fine - the review feedback goes to Planner's context anyway.
+	var response *protocol.ReviewResponse
+	if result.Text != "" {
+		response, _ = reviewer.ParseReviewResponse(result.Text)
+	}
+	if response == nil {
+		response = &protocol.ReviewResponse{}
+	}
 
 	// Checkpoint: review completed successfully
 	if p.checkpointMgr != nil {

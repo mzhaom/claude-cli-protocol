@@ -255,11 +255,10 @@ func (s *MCPServer) callDesigner(ctx context.Context, args json.RawMessage) (*to
 		}, nil
 	}
 
-	// Format the response
-	text := "Design completed successfully."
-	if resp.Architecture != "" {
-		text = fmt.Sprintf("Design completed.\n\nArchitecture:\n%s", resp.Architecture)
-	}
+	// Include structured JSON for parsing by Planner
+	jsonBytes, _ := json.Marshal(resp)
+	text := fmt.Sprintf("Design completed.\n\n<design_json>\n%s\n</design_json>\n\nSummary:\n%s",
+		string(jsonBytes), resp.Architecture)
 
 	return &toolCallResult{
 		Content: []contentItem{
@@ -305,12 +304,10 @@ func (s *MCPServer) callBuilder(ctx context.Context, args json.RawMessage) (*too
 		}, nil
 	}
 
-	// Format the response
-	text := "Build completed successfully."
-	if len(resp.FilesCreated) > 0 || len(resp.FilesModified) > 0 {
-		text = fmt.Sprintf("Build completed.\nFiles created: %v\nFiles modified: %v",
-			resp.FilesCreated, resp.FilesModified)
-	}
+	// Include structured JSON for parsing by Planner
+	jsonBytes, _ := json.Marshal(resp)
+	text := fmt.Sprintf("Build completed.\n\n<build_json>\n%s\n</build_json>\n\nFiles created: %v\nFiles modified: %v",
+		string(jsonBytes), resp.FilesCreated, resp.FilesModified)
 
 	return &toolCallResult{
 		Content: []contentItem{
@@ -351,9 +348,10 @@ func (s *MCPServer) callReviewer(ctx context.Context, args json.RawMessage) (*to
 		}, nil
 	}
 
-	// Format the response
+	// Include structured JSON for parsing by Planner
+	jsonBytes, _ := json.Marshal(resp)
 	approved := !resp.HasCriticalIssues()
-	text := fmt.Sprintf("Review completed.\nApproved: %v", approved)
+	text := fmt.Sprintf("Review completed.\n\n<review_json>\n%s\n</review_json>\n\nApproved: %v", string(jsonBytes), approved)
 	if resp.Summary != "" {
 		text += fmt.Sprintf("\nSummary: %s", resp.Summary)
 	}

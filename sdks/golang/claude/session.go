@@ -543,6 +543,12 @@ func (s *Session) handleResult(msg protocol.ResultMessage) {
 		},
 	}
 
+	// Populate text fields from turn state
+	if turn != nil {
+		result.Text = turn.FullText
+		result.Thinking = turn.FullThinking
+	}
+
 	if msg.IsError {
 		result.Error = fmt.Errorf("%s", msg.Result)
 	}

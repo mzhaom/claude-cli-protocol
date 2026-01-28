@@ -21,6 +21,8 @@ type TurnResult struct {
 	DurationMs int64
 	Usage      TurnUsage
 	Error      error
+	Text       string // Full response text from the turn
+	Thinking   string // Extended thinking content (if enabled)
 }
 
 // turnState tracks the state of a single turn.
