@@ -124,23 +124,25 @@ func (s *StreamingSubAgent) Execute(ctx context.Context, prompt string) (*Result
 		s.closeEventsDirect()
 		return nil, fmt.Errorf("failed to start session: %w", err)
 	}
-	defer session.Stop()
 
 	// Start event processing goroutine
 	go s.processClaudeEvents(ctx, session)
 
 	// Send the message
 	result, err := session.Ask(ctx, prompt)
+
+	// Stop the session first - this closes the events channel which
+	// allows processClaudeEvents to exit
+	session.Stop()
+
+	// Now wait for event processing goroutine to finish
+	<-s.eventsDone
+
 	if err != nil {
 		s.emitError("execution_failed", err.Error(), true)
-		// Wait for the goroutine to finish before closing events
-		<-s.eventsDone
 		s.closeEventsDirect()
 		return nil, fmt.Errorf("execution failed: %w", err)
 	}
-
-	// Wait for event processing to complete
-	<-s.eventsDone
 
 	// Build final result
 	durationMs := time.Since(startTime).Milliseconds()

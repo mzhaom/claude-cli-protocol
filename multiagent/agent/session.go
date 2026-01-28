@@ -246,7 +246,6 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	if err := session.Start(ctx); err != nil {
 		return nil, nil, taskID, fmt.Errorf("failed to start session: %w", err)
 	}
-	defer session.Stop()
 
 	// Track files from tool events in background
 	var filesMu sync.Mutex
@@ -284,7 +283,10 @@ func (e *EphemeralSession) ExecuteWithFiles(ctx context.Context, prompt string) 
 	// Execute the single turn
 	result, err := session.Ask(ctx, prompt)
 
-	// Wait for event processing to complete before accessing file lists
+	// Stop the session first - this closes the events channel
+	session.Stop()
+
+	// Now wait for event processing goroutine to finish
 	<-eventsDone
 
 	if err != nil {
