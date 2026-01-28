@@ -170,6 +170,56 @@ func (s *Session) SendMessage(ctx context.Context, content string) (int, error) 
 	return turn.Number, nil
 }
 
+// SendToolResult sends a tool result for a specific tool use.
+// This is used when the SDK handles a tool locally (like AskUserQuestion).
+// The content is sent as a tool_result content block with the given tool_use_id.
+func (s *Session) SendToolResult(ctx context.Context, toolUseID, content string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return 0, ErrNotStarted
+	}
+
+	if s.stopping {
+		return 0, ErrStopping
+	}
+
+	turn := s.turnManager.StartTurn(content)
+
+	// Record turn start
+	if s.recorder != nil {
+		s.recorder.StartTurn(turn.Number, content)
+	}
+
+	msg := protocol.UserMessageToSend{
+		Type: "user",
+		Message: protocol.UserMessageToSendInner{
+			Role: "user",
+			Content: []interface{}{
+				map[string]interface{}{
+					"type":        "tool_result",
+					"tool_use_id": toolUseID,
+					"content":     content,
+				},
+			},
+		},
+	}
+
+	if err := s.process.WriteMessage(msg); err != nil {
+		return 0, err
+	}
+
+	if s.recorder != nil {
+		s.recorder.RecordSent(msg)
+	}
+
+	// Transition to processing state if we're ready
+	_ = s.state.Transition(TransitionUserMessageSent)
+
+	return turn.Number, nil
+}
+
 // WaitForTurn blocks until the current turn completes.
 // If no turn is in progress, it returns immediately with nil.
 func (s *Session) WaitForTurn(ctx context.Context) (*TurnResult, error) {
