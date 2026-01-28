@@ -15,6 +15,14 @@ type PermissionRequest struct {
 }
 
 // PermissionResponse contains the response to a permission request.
+//
+// Wire format notes (per Python SDK behavior):
+//   - UpdatedInput: If nil, the permissionManager will use the original input from
+//     the request as fallback. The wire format requires updatedInput to be an object,
+//     NEVER null. Handlers that want to use the original input unchanged can leave
+//     this nil - the manager handles the fallback.
+//   - UpdatedPermissions: Can be nil (will be omitted from wire format). Only set
+//     this when you want to add permission rules.
 type PermissionResponse struct {
 	Behavior           PermissionBehavior
 	Message            string
@@ -97,12 +105,24 @@ func (pm *permissionManager) HandleRequest(ctx context.Context, msg protocol.Con
 		return pm.buildDenyResponse(msg.RequestID, "Permission handler error", false), err
 	}
 
-	return pm.buildResponse(msg.RequestID, resp), nil
+	return pm.buildResponse(msg.RequestID, resp, req.Input), nil
 }
 
 // buildResponse builds a control response from a permission response.
-func (pm *permissionManager) buildResponse(requestID string, resp *PermissionResponse) *protocol.ControlResponse {
+// originalInput is used as fallback when resp.UpdatedInput is nil (per Python SDK behavior).
+func (pm *permissionManager) buildResponse(requestID string, resp *PermissionResponse, originalInput map[string]interface{}) *protocol.ControlResponse {
 	if resp.Behavior == PermissionAllow {
+		// Per Python SDK: updatedInput must be an object, never null
+		// If user doesn't provide updated input, use the original input
+		updatedInput := resp.UpdatedInput
+		if updatedInput == nil {
+			updatedInput = originalInput
+		}
+		// Ensure we never send nil - use empty map as last resort
+		if updatedInput == nil {
+			updatedInput = make(map[string]interface{})
+		}
+
 		return &protocol.ControlResponse{
 			Type: protocol.MessageTypeControlResponse,
 			Response: protocol.ControlResponsePayload{
@@ -110,7 +130,7 @@ func (pm *permissionManager) buildResponse(requestID string, resp *PermissionRes
 				RequestID: requestID,
 				Response: protocol.PermissionResultAllow{
 					Behavior:           protocol.PermissionBehaviorAllow,
-					UpdatedInput:       resp.UpdatedInput,
+					UpdatedInput:       updatedInput,
 					UpdatedPermissions: resp.UpdatedPermissions,
 				},
 			},

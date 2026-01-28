@@ -55,6 +55,12 @@ type SessionConfig struct {
 
 	// SystemPrompt overrides the default system prompt.
 	SystemPrompt string
+
+	// PermissionPromptToolStdio enables stdio-based permission prompts.
+	// When true, all permission prompts flow through the control protocol
+	// as can_use_tool control requests instead of CLI's interactive UI.
+	// This enables fully programmatic permission control.
+	PermissionPromptToolStdio bool
 }
 
 // SessionOption is a functional option for configuring a Session.
@@ -145,6 +151,16 @@ func WithMCPConfig(cfg *MCPConfig) SessionOption {
 func WithSystemPrompt(prompt string) SessionOption {
 	return func(c *SessionConfig) {
 		c.SystemPrompt = prompt
+	}
+}
+
+// WithPermissionPromptToolStdio enables stdio-based permission prompts.
+// This causes all tool permissions to be sent as can_use_tool control requests
+// instead of being handled by the CLI's interactive UI.
+// Use this with WithPermissionHandler to implement programmatic permission control.
+func WithPermissionPromptToolStdio() SessionOption {
+	return func(c *SessionConfig) {
+		c.PermissionPromptToolStdio = true
 	}
 }
 

@@ -35,16 +35,9 @@ func newProcessManager(config SessionConfig) *processManager {
 	}
 }
 
-// Start spawns the Claude CLI process.
-func (pm *processManager) Start(ctx context.Context) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	if pm.started {
-		return ErrAlreadyStarted
-	}
-
-	// Build command arguments
+// BuildCLIArgs builds the CLI arguments from the config.
+// This is exposed so callers can see what flags will be used.
+func (pm *processManager) BuildCLIArgs() ([]string, error) {
 	args := []string{
 		"--print",
 		"--input-format", "stream-json",
@@ -65,11 +58,15 @@ func (pm *processManager) Start(ctx context.Context) error {
 		args = append(args, "--plugin-dir", "/dev/null")
 	}
 
+	if pm.config.PermissionPromptToolStdio {
+		args = append(args, "--permission-prompt-tool", "stdio")
+	}
+
 	// Add MCP configuration if provided
 	if pm.config.MCPConfig != nil && len(pm.config.MCPConfig.MCPServers) > 0 {
 		mcpJSON, err := json.Marshal(pm.config.MCPConfig)
 		if err != nil {
-			return &ProcessError{Message: "failed to marshal MCP config", Cause: err}
+			return nil, &ProcessError{Message: "failed to marshal MCP config", Cause: err}
 		}
 		args = append(args, "--mcp-config", string(mcpJSON))
 	}
@@ -81,6 +78,24 @@ func (pm *processManager) Start(ctx context.Context) error {
 
 	// Always include partial messages for tool progress tracking
 	args = append(args, "--include-partial-messages")
+
+	return args, nil
+}
+
+// Start spawns the Claude CLI process.
+func (pm *processManager) Start(ctx context.Context) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	if pm.started {
+		return ErrAlreadyStarted
+	}
+
+	// Build command arguments
+	args, err := pm.BuildCLIArgs()
+	if err != nil {
+		return err
+	}
 
 	// Determine CLI path
 	cliPath := pm.config.CLIPath
@@ -97,7 +112,6 @@ func (pm *processManager) Start(ctx context.Context) error {
 	}
 
 	// Get pipes
-	var err error
 	pm.stdin, err = pm.cmd.StdinPipe()
 	if err != nil {
 		return &ProcessError{Message: "failed to create stdin pipe", Cause: err}
