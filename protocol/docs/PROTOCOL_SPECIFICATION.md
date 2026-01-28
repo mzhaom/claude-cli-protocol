@@ -726,6 +726,42 @@ Synchronous hook output with control and decision fields.
 
 The permission system controls tool execution approval.
 
+### Wire Format Note
+
+**IMPORTANT**: The CLI's Zod schema expects **camelCase** field names for permission responses
+sent TO the CLI, even though the Python SDK type definitions use snake_case. When implementing
+SDKs, ensure the JSON wire format uses:
+- `updatedInput` (not `updated_input`)
+- `updatedPermissions` (not `updated_permissions`)
+
+**Critical behavior (per Python SDK implementation in `_internal/query.py`):**
+
+1. **`updatedInput` MUST be an object, NEVER null**:
+   - If the user's permission handler doesn't provide `updated_input`, fall back to the **original input** from the `can_use_tool` request
+   - This ensures the tool receives valid input parameters
+   - Use an empty object `{}` as a last resort if original input is also unavailable
+
+2. **`updatedPermissions` CAN be omitted when nil**:
+   - Unlike `updatedInput`, this field can be completely omitted if there are no permission updates
+   - Only include it when you want to add/modify permission rules
+
+**Correct wire format example:**
+```json
+{
+  "behavior": "allow",
+  "updatedInput": {"command": "echo hello"}
+}
+```
+
+**With permission updates:**
+```json
+{
+  "behavior": "allow",
+  "updatedInput": {"command": "echo hello"},
+  "updatedPermissions": [{"type": "setMode", "mode": "acceptEdits", "destination": "session"}]
+}
+```
+
 ### Permission Result Types
 
 
@@ -733,11 +769,11 @@ The permission system controls tool execution approval.
 
 Allow permission result.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `behavior` | `"allow"` | No | |
-| `updated_input` | `dict[str, typing.Any] | None` | No | |
-| `updated_permissions` | `list[claude_agent_sdk.types.PermissionUpdate] | None` | No | |
+| Field | Type | Required | Wire Name | Description |
+|-------|------|----------|-----------|-------------|
+| `behavior` | `"allow"` | No | `behavior` | |
+| `updated_input` | `dict[str, typing.Any] | None` | No | `updatedInput` | **MUST be object** (use original input as fallback, never null) |
+| `updated_permissions` | `list[claude_agent_sdk.types.PermissionUpdate] | None` | No | `updatedPermissions` | Can be omitted when nil |
 
 #### PermissionResultDeny
 

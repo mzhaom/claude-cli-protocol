@@ -114,10 +114,13 @@ const (
 )
 
 // PermissionResultAllow allows tool execution.
+// Wire format notes (per Python SDK behavior):
+// - updatedInput MUST be an object (record), never null - use original input as fallback
+// - updatedPermissions can be omitted if nil
 type PermissionResultAllow struct {
 	Behavior           PermissionBehavior     `json:"behavior"`
-	UpdatedInput       map[string]interface{} `json:"updated_input,omitempty"`
-	UpdatedPermissions []PermissionUpdate     `json:"updated_permissions,omitempty"`
+	UpdatedInput       map[string]interface{} `json:"updatedInput"`
+	UpdatedPermissions []PermissionUpdate     `json:"updatedPermissions,omitempty"`
 }
 
 // PermissionResultDeny denies tool execution.

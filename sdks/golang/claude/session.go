@@ -217,6 +217,10 @@ func (s *Session) SetPermissionMode(ctx context.Context, mode PermissionMode) er
 		},
 	}
 
+	if s.recorder != nil {
+		s.recorder.RecordSent(req)
+	}
+
 	return s.process.WriteMessage(req)
 }
 
@@ -235,6 +239,10 @@ func (s *Session) Interrupt(ctx context.Context) error {
 		Request: protocol.InterruptRequestToSend{
 			Subtype: "interrupt",
 		},
+	}
+
+	if s.recorder != nil {
+		s.recorder.RecordSent(req)
 	}
 
 	return s.process.WriteMessage(req)
@@ -298,6 +306,17 @@ func (s *Session) RecordingPath() string {
 		return ""
 	}
 	return s.recorder.Path()
+}
+
+// CLIArgs returns the CLI arguments that will be (or were) used to spawn the CLI.
+// This can be called before or after Start() to see the exact flags being used.
+func (s *Session) CLIArgs() ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Create a temporary process manager to build the args
+	pm := newProcessManager(s.config)
+	return pm.BuildCLIArgs()
 }
 
 // readLoop reads and processes messages from the CLI.

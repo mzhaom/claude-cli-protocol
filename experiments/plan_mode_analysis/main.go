@@ -13,136 +13,212 @@ import (
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
 
+// ExperimentConfig defines the parameters for each experiment
+type ExperimentConfig struct {
+	Name                    string
+	Description             string
+	PermissionMode          claude.PermissionMode
+	PermissionPromptTool    string // "stdio" or ""
+	PlanModeTrigger         string // "cmdline", "control_before", "control_after", or ""
+	PermissionHandler       claude.PermissionHandler
+	UseCodeReviewScenario   bool
+	Message                 string
+}
+
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
-	testMessage := "What is 2+2?"
+	// Define all experiments with their configurations
+	experiments := []ExperimentConfig{
+		// Original plan mode experiments
+		{
+			Name:            "A",
+			Description:     "Default mode → Send message → Switch to Plan mode",
+			PermissionMode:  claude.PermissionModeDefault,
+			PlanModeTrigger: "control_after",
+			Message:         "What is 2+2?",
+		},
+		{
+			Name:            "B",
+			Description:     "Start directly in Plan mode",
+			PermissionMode:  claude.PermissionModePlan,
+			PlanModeTrigger: "cmdline",
+			Message:         "What is 2+2?",
+		},
+		{
+			Name:            "C",
+			Description:     "Default mode → Switch to Plan BEFORE user message",
+			PermissionMode:  claude.PermissionModeDefault,
+			PlanModeTrigger: "control_before",
+			Message:         "What is 2+2?",
+		},
+		// Permission prompt tool experiments
+		{
+			Name:                  "D",
+			Description:           "Permission Prompt Tool + Code Review (Allow)",
+			PermissionMode:        claude.PermissionModeDefault,
+			PermissionPromptTool:  "stdio",
+			PermissionHandler:     claude.AllowAllPermissionHandler(),
+			UseCodeReviewScenario: true,
+			Message:               "Evaluate the existing code in hello.py, suggest next move and fix the issue.",
+		},
+		{
+			Name:                  "E",
+			Description:           "Permission Prompt Tool + Code Review (Deny)",
+			PermissionMode:        claude.PermissionModeDefault,
+			PermissionPromptTool:  "stdio",
+			PermissionHandler:     claude.DefaultPermissionHandler(),
+			UseCodeReviewScenario: true,
+			Message:               "Evaluate the existing code in hello.py, suggest next move and fix the issue.",
+		},
+		{
+			Name:                  "F",
+			Description:           "Control - WITHOUT Permission Prompt Tool",
+			PermissionMode:        claude.PermissionModeDefault,
+			PermissionPromptTool:  "",
+			PermissionHandler:     claude.AllowAllPermissionHandler(),
+			UseCodeReviewScenario: true,
+			Message:               "Evaluate the existing code in hello.py, suggest next move and fix the issue.",
+		},
+		{
+			Name:                  "G",
+			Description:           "Permission Prompt Tool + Plan Mode",
+			PermissionMode:        claude.PermissionModePlan,
+			PermissionPromptTool:  "stdio",
+			PlanModeTrigger:       "cmdline",
+			PermissionHandler:     claude.AllowAllPermissionHandler(),
+			UseCodeReviewScenario: true,
+			Message:               "Evaluate the existing code in hello.py, suggest next move and fix the issue.",
+		},
+		{
+			Name:                  "H",
+			Description:           "Permission Prompt Tool + BypassPermissions",
+			PermissionMode:        claude.PermissionModeBypass,
+			PermissionPromptTool:  "stdio",
+			PermissionHandler:     claude.AllowAllPermissionHandler(),
+			UseCodeReviewScenario: true,
+			Message:               "Evaluate the existing code in hello.py, suggest next move and fix the issue.",
+		},
+	}
 
-	// Run all three experiments
-	fmt.Println("=== Experiment A: Default mode → Send message → Switch to Plan mode ===")
-	runExperimentA(ctx, testMessage)
+	// Run original plan mode experiments
+	fmt.Println("=== PLAN MODE EXPERIMENTS ===")
+	for _, exp := range experiments[:3] {
+		fmt.Printf("\n=== Experiment %s: %s ===\n", exp.Name, exp.Description)
+		runExperiment(ctx, exp)
+	}
 
-	fmt.Println("\n=== Experiment B: Start directly in Plan mode ===")
-	runExperimentB(ctx, testMessage)
-
-	fmt.Println("\n=== Experiment C: Default mode → Switch to Plan BEFORE user message ===")
-	runExperimentC(ctx, testMessage)
+	// Run permission prompt tool experiments
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("PERMISSION PROMPT TOOL EXPERIMENTS")
+	fmt.Println(strings.Repeat("=", 70))
+	for _, exp := range experiments[3:] {
+		fmt.Printf("\n=== Experiment %s: %s ===\n", exp.Name, exp.Description)
+		runExperiment(ctx, exp)
+	}
 
 	fmt.Println("\n=== Comparing Results ===")
 	compareRecordings()
+
+	fmt.Println("\n=== Permission Prompt Tool Analysis ===")
+	analyzePermissionPromptToolBehavior()
 }
 
-func runExperimentA(ctx context.Context, message string) {
-	// Start in default mode (no --dangerously-skip-permissions)
-	session := claude.NewSession(
-		claude.WithModel("haiku"),
-		claude.WithPermissionMode(claude.PermissionModeDefault),
-		claude.WithRecording("./recordings/experiment_a"),
-		claude.WithDisablePlugins(),
-	)
-
-	fmt.Println("Starting session in DEFAULT mode...")
-	if err := session.Start(ctx); err != nil {
-		fmt.Printf("Failed to start: %v\n", err)
-		return
-	}
-	defer session.Stop()
-
-	// Send user message first - the CLI sends init AFTER receiving the first message
-	fmt.Printf("Sending message: %s\n", message)
-	_, err := session.SendMessage(ctx, message)
+// createBrokenPythonProject creates a temp directory with a broken hello.py file
+func createBrokenPythonProject() (string, error) {
+	tmpDir, err := os.MkdirTemp("", "permission-test-*")
 	if err != nil {
-		fmt.Printf("Failed to send message: %v\n", err)
-		return
+		return "", err
 	}
 
-	// Collect events - ReadyEvent comes after the first message
-	events := collectTurnEvents(ctx, session)
-	if events.Ready != nil {
-		fmt.Printf("Session ready! PermissionMode: %s\n", events.Ready.Info.PermissionMode)
-	}
-	if events.TurnComplete != nil {
-		fmt.Printf("Turn complete - Success: %v, Cost: $%.6f\n", events.TurnComplete.Success, events.TurnComplete.Usage.CostUSD)
+	brokenCode := `#!/usr/bin/env python3
+# Hello World example with a bug
+
+def main()
+    print("Hello, World!")
+
+if __name__ == "__main__":
+    main()
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "hello.py"), []byte(brokenCode), 0644); err != nil {
+		os.RemoveAll(tmpDir)
+		return "", err
 	}
 
-	// Now switch to plan mode via control message (AFTER turn completes)
-	fmt.Println("Switching to plan mode via control message...")
-	if err := session.SetPermissionMode(ctx, claude.PermissionModePlan); err != nil {
-		fmt.Printf("Failed to set permission mode: %v\n", err)
-	}
-	time.Sleep(1 * time.Second) // Give time for control response
-
-	fmt.Printf("Recording path: %s\n", session.RecordingPath())
+	return tmpDir, nil
 }
 
-func runExperimentB(ctx context.Context, message string) {
-	// Start directly in plan mode (no --dangerously-skip-permissions)
-	session := claude.NewSession(
+func runExperiment(ctx context.Context, cfg ExperimentConfig) {
+	var tmpDir string
+	var err error
+
+	// Create temp project if needed
+	if cfg.UseCodeReviewScenario {
+		tmpDir, err = createBrokenPythonProject()
+		if err != nil {
+			fmt.Printf("Failed to create temp project: %v\n", err)
+			return
+		}
+		defer os.RemoveAll(tmpDir)
+		fmt.Printf("Created temp project at: %s\n", tmpDir)
+	}
+
+	// Build session options
+	opts := []claude.SessionOption{
 		claude.WithModel("haiku"),
-		claude.WithPermissionMode(claude.PermissionModePlan),
-		claude.WithRecording("./recordings/experiment_b"),
+		claude.WithRecording(fmt.Sprintf("./recordings/experiment_%s", strings.ToLower(cfg.Name))),
 		claude.WithDisablePlugins(),
-	)
-
-	fmt.Println("Starting session in PLAN mode...")
-	if err := session.Start(ctx); err != nil {
-		fmt.Printf("Failed to start: %v\n", err)
-		return
-	}
-	defer session.Stop()
-
-	// Send user message first - the CLI sends init AFTER receiving the first message
-	fmt.Printf("Sending message: %s\n", message)
-	_, err := session.SendMessage(ctx, message)
-	if err != nil {
-		fmt.Printf("Failed to send message: %v\n", err)
-		return
 	}
 
-	// Collect events - ReadyEvent comes after the first message
-	events := collectTurnEvents(ctx, session)
-	if events.Ready != nil {
-		fmt.Printf("Session ready! PermissionMode: %s\n", events.Ready.Info.PermissionMode)
-	}
-	if events.TurnComplete != nil {
-		fmt.Printf("Turn complete - Success: %v, Cost: $%.6f\n", events.TurnComplete.Success, events.TurnComplete.Usage.CostUSD)
-	}
-
-	fmt.Printf("Recording path: %s\n", session.RecordingPath())
-}
-
-func runExperimentC(ctx context.Context, message string) {
-	// Start in default mode, then try to switch to plan BEFORE sending user message
-	session := claude.NewSession(
-		claude.WithModel("haiku"),
-		claude.WithPermissionMode(claude.PermissionModeDefault),
-		claude.WithRecording("./recordings/experiment_c"),
-		claude.WithDisablePlugins(),
-	)
-
-	fmt.Println("Starting session in DEFAULT mode...")
-	if err := session.Start(ctx); err != nil {
-		fmt.Printf("Failed to start: %v\n", err)
-		return
-	}
-	defer session.Stop()
-
-	// Try to switch to plan mode BEFORE sending any user message
-	// This tests whether control messages work before the init message is received
-	fmt.Println("Attempting to switch to plan mode BEFORE user message...")
-	if err := session.SetPermissionMode(ctx, claude.PermissionModePlan); err != nil {
-		fmt.Printf("SetPermissionMode result: %v\n", err)
+	// Set permission mode (for cmdline plan mode or other modes)
+	if cfg.PlanModeTrigger == "cmdline" || cfg.PlanModeTrigger == "" {
+		opts = append(opts, claude.WithPermissionMode(cfg.PermissionMode))
 	} else {
-		fmt.Println("SetPermissionMode sent successfully (no error)")
+		// For control message plan mode triggers, start in default
+		opts = append(opts, claude.WithPermissionMode(claude.PermissionModeDefault))
 	}
 
-	// Give time to see if any response comes back
-	time.Sleep(2 * time.Second)
+	// Set permission prompt tool
+	if cfg.PermissionPromptTool == "stdio" {
+		opts = append(opts, claude.WithPermissionPromptToolStdio())
+	}
 
-	// Now send the user message
-	fmt.Printf("Sending message: %s\n", message)
-	_, err := session.SendMessage(ctx, message)
+	// Set permission handler
+	if cfg.PermissionHandler != nil {
+		opts = append(opts, claude.WithPermissionHandler(cfg.PermissionHandler))
+	}
+
+	// Set working directory
+	if tmpDir != "" {
+		opts = append(opts, claude.WithWorkDir(tmpDir))
+	}
+
+	session := claude.NewSession(opts...)
+
+	fmt.Printf("Starting session (PermissionMode=%s, PermissionPromptTool=%q)...\n",
+		cfg.PermissionMode, cfg.PermissionPromptTool)
+
+	if err := session.Start(ctx); err != nil {
+		fmt.Printf("Failed to start: %v\n", err)
+		return
+	}
+	defer session.Stop()
+
+	// Handle control_before plan mode trigger
+	if cfg.PlanModeTrigger == "control_before" {
+		fmt.Println("Switching to plan mode BEFORE user message...")
+		if err := session.SetPermissionMode(ctx, claude.PermissionModePlan); err != nil {
+			fmt.Printf("SetPermissionMode result: %v\n", err)
+		} else {
+			fmt.Println("SetPermissionMode sent successfully")
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Send message
+	fmt.Printf("Sending message: %s\n", cfg.Message)
+	_, err = session.SendMessage(ctx, cfg.Message)
 	if err != nil {
 		fmt.Printf("Failed to send message: %v\n", err)
 		return
@@ -154,7 +230,17 @@ func runExperimentC(ctx context.Context, message string) {
 		fmt.Printf("Session ready! PermissionMode: %s\n", events.Ready.Info.PermissionMode)
 	}
 	if events.TurnComplete != nil {
-		fmt.Printf("Turn complete - Success: %v, Cost: $%.6f\n", events.TurnComplete.Success, events.TurnComplete.Usage.CostUSD)
+		fmt.Printf("Turn complete - Success: %v, Cost: $%.6f\n",
+			events.TurnComplete.Success, events.TurnComplete.Usage.CostUSD)
+	}
+
+	// Handle control_after plan mode trigger
+	if cfg.PlanModeTrigger == "control_after" {
+		fmt.Println("Switching to plan mode AFTER turn completes...")
+		if err := session.SetPermissionMode(ctx, claude.PermissionModePlan); err != nil {
+			fmt.Printf("Failed to set permission mode: %v\n", err)
+		}
+		time.Sleep(1 * time.Second)
 	}
 
 	fmt.Printf("Recording path: %s\n", session.RecordingPath())
@@ -198,7 +284,6 @@ func collectTurnEvents(ctx context.Context, s *claude.Session) *TurnEvents {
 }
 
 func compareRecordings() {
-	// Find latest recording directories
 	dirA := findLatestRecording("./recordings/experiment_a")
 	dirB := findLatestRecording("./recordings/experiment_b")
 	dirC := findLatestRecording("./recordings/experiment_c")
@@ -207,35 +292,19 @@ func compareRecordings() {
 	fmt.Printf("Experiment B recording: %s\n", dirB)
 	fmt.Printf("Experiment C recording: %s\n", dirC)
 
-	// Compare from_cli.jsonl (messages from CLI)
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Println("Messages FROM CLI (what Claude CLI sends to us)")
 	fmt.Println(strings.Repeat("=", 70))
 
-	fmt.Println("\n>>> Experiment A (Default → message → Plan):")
-	printJsonlSummary(filepath.Join(dirA, "from_cli.jsonl"))
+	for _, exp := range []struct{ name, dir string }{
+		{"A (Default → message → Plan)", dirA},
+		{"B (Plan from start)", dirB},
+		{"C (Default → Plan BEFORE message)", dirC},
+	} {
+		fmt.Printf("\n>>> Experiment %s:\n", exp.name)
+		printJsonlSummary(filepath.Join(exp.dir, "from_cli.jsonl"))
+	}
 
-	fmt.Println("\n>>> Experiment B (Plan from start):")
-	printJsonlSummary(filepath.Join(dirB, "from_cli.jsonl"))
-
-	fmt.Println("\n>>> Experiment C (Default → Plan BEFORE message):")
-	printJsonlSummary(filepath.Join(dirC, "from_cli.jsonl"))
-
-	// Compare to_cli.jsonl (messages to CLI)
-	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("Messages TO CLI (what we send to Claude CLI)")
-	fmt.Println(strings.Repeat("=", 70))
-
-	fmt.Println("\n>>> Experiment A (Default → message → Plan):")
-	printJsonlSummary(filepath.Join(dirA, "to_cli.jsonl"))
-
-	fmt.Println("\n>>> Experiment B (Plan from start):")
-	printJsonlSummary(filepath.Join(dirB, "to_cli.jsonl"))
-
-	fmt.Println("\n>>> Experiment C (Default → Plan BEFORE message):")
-	printJsonlSummary(filepath.Join(dirC, "to_cli.jsonl"))
-
-	// Print key differences
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Println("KEY DIFFERENCES")
 	fmt.Println(strings.Repeat("=", 70))
@@ -274,32 +343,15 @@ func printJsonlSummary(path string) {
 		msgType, _ := msg["type"].(string)
 		subtype, _ := msg["subtype"].(string)
 
-		// Build summary line
 		summary := fmt.Sprintf("  [%d] type=%s", msgNum, msgType)
 		if subtype != "" {
 			summary += fmt.Sprintf(", subtype=%s", subtype)
 		}
 
-		// Add key details based on message type
 		switch msgType {
 		case "system":
 			if permMode, ok := msg["permissionMode"].(string); ok {
 				summary += fmt.Sprintf(", permissionMode=%s", permMode)
-			}
-		case "user":
-			if message, ok := msg["message"].(map[string]interface{}); ok {
-				if content, ok := message["content"].(string); ok && len(content) < 50 {
-					summary += fmt.Sprintf(", content=%q", content)
-				}
-			}
-		case "control_request":
-			if req, ok := msg["request"].(map[string]interface{}); ok {
-				if reqSubtype, ok := req["subtype"].(string); ok {
-					summary += fmt.Sprintf(", request.subtype=%s", reqSubtype)
-				}
-				if mode, ok := req["mode"].(string); ok {
-					summary += fmt.Sprintf(", mode=%s", mode)
-				}
 			}
 		case "control_response":
 			if resp, ok := msg["response"].(map[string]interface{}); ok {
@@ -324,47 +376,26 @@ func printJsonlSummary(path string) {
 }
 
 func analyzeKeyDifferences(dirA, dirB, dirC string) {
-	// Read init messages from all experiments
 	initA := readInitMessage(filepath.Join(dirA, "from_cli.jsonl"))
 	initB := readInitMessage(filepath.Join(dirB, "from_cli.jsonl"))
 	initC := readInitMessage(filepath.Join(dirC, "from_cli.jsonl"))
 
-	// Compare permission modes
 	fmt.Printf("\n1. Initial Permission Mode (from init message):\n")
-	if initA != nil {
-		fmt.Printf("   Experiment A: %s\n", initA["permissionMode"])
-	} else {
-		fmt.Printf("   Experiment A: (no init message recorded)\n")
+	for name, init := range map[string]map[string]interface{}{
+		"A": initA, "B": initB, "C": initC,
+	} {
+		if init != nil {
+			fmt.Printf("   Experiment %s: %s\n", name, init["permissionMode"])
+		} else {
+			fmt.Printf("   Experiment %s: (no init message recorded)\n", name)
+		}
 	}
-	if initB != nil {
-		fmt.Printf("   Experiment B: %s\n", initB["permissionMode"])
-	} else {
-		fmt.Printf("   Experiment B: (no init message recorded)\n")
-	}
-	if initC != nil {
-		fmt.Printf("   Experiment C: %s\n", initC["permissionMode"])
-	} else {
-		fmt.Printf("   Experiment C: (no init message recorded)\n")
-	}
-
-	// Count control responses (received from CLI)
-	controlRespA := countControlResponses(filepath.Join(dirA, "from_cli.jsonl"))
-	controlRespB := countControlResponses(filepath.Join(dirB, "from_cli.jsonl"))
-	controlRespC := countControlResponses(filepath.Join(dirC, "from_cli.jsonl"))
 
 	fmt.Printf("\n2. Control Responses Received:\n")
-	fmt.Printf("   Experiment A: %d\n", controlRespA)
-	fmt.Printf("   Experiment B: %d\n", controlRespB)
-	fmt.Printf("   Experiment C: %d\n", controlRespC)
-
-	// Print the actual control responses
-	fmt.Printf("\n3. Control Responses in each experiment:\n")
-	fmt.Printf("\n   Experiment A:\n")
-	printControlResponses(filepath.Join(dirA, "from_cli.jsonl"))
-	fmt.Printf("\n   Experiment B:\n")
-	printControlResponses(filepath.Join(dirB, "from_cli.jsonl"))
-	fmt.Printf("\n   Experiment C:\n")
-	printControlResponses(filepath.Join(dirC, "from_cli.jsonl"))
+	for name, dir := range map[string]string{"A": dirA, "B": dirB, "C": dirC} {
+		count := countControlResponses(filepath.Join(dir, "from_cli.jsonl"))
+		fmt.Printf("   Experiment %s: %d\n", name, count)
+	}
 }
 
 func readInitMessage(path string) map[string]interface{} {
@@ -404,7 +435,184 @@ func countControlResponses(path string) int {
 	return count
 }
 
-func printControlResponses(path string) {
+// ============================================================================
+// PERMISSION PROMPT TOOL ANALYSIS FUNCTIONS
+// ============================================================================
+
+func analyzePermissionPromptToolBehavior() {
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("PERMISSION PROMPT TOOL BEHAVIOR ANALYSIS")
+	fmt.Println(strings.Repeat("=", 70))
+
+	dirs := map[string]string{
+		"D (stdio + allow)":   findLatestRecording("./recordings/experiment_d"),
+		"E (stdio + deny)":    findLatestRecording("./recordings/experiment_e"),
+		"F (control/no flag)": findLatestRecording("./recordings/experiment_f"),
+		"G (stdio + plan)":    findLatestRecording("./recordings/experiment_g"),
+		"H (stdio + bypass)":  findLatestRecording("./recordings/experiment_h"),
+	}
+
+	fmt.Println("\n1. can_use_tool Control Requests FROM CLI:")
+	for name, dir := range dirs {
+		if dir == "" {
+			fmt.Printf("   %s: (no recording)\n", name)
+			continue
+		}
+		count := countCanUseToolRequests(filepath.Join(dir, "messages.jsonl"))
+		fmt.Printf("   %s: %d requests\n", name, count)
+	}
+
+	fmt.Println("\n2. Permission Responses Sent TO CLI:")
+	for name, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		count := countPermissionResponses(filepath.Join(dir, "messages.jsonl"))
+		fmt.Printf("   %s: %d responses\n", name, count)
+	}
+
+	fmt.Println("\n3. Tools Requiring Permission (from can_use_tool requests):")
+	for name, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		tools := getToolsRequiringPermission(filepath.Join(dir, "messages.jsonl"))
+		if len(tools) == 0 {
+			fmt.Printf("   %s: (none)\n", name)
+		} else {
+			fmt.Printf("   %s: %v\n", name, tools)
+		}
+	}
+
+	fmt.Println("\n4. Detailed can_use_tool Requests:")
+	for name, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		fmt.Printf("\n   >>> %s:\n", name)
+		printCanUseToolRequests(filepath.Join(dir, "messages.jsonl"))
+	}
+
+	fmt.Println("\n5. Detailed Permission Responses Sent:")
+	for name, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		fmt.Printf("\n   >>> %s:\n", name)
+		printPermissionResponsesSent(filepath.Join(dir, "messages.jsonl"))
+	}
+
+}
+
+func countCanUseToolRequests(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		json.Unmarshal(scanner.Bytes(), &record)
+
+		if record["direction"] != "received" {
+			continue
+		}
+
+		msg, ok := record["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if msg["type"] == "control_request" {
+			if req, ok := msg["request"].(map[string]interface{}); ok {
+				if req["subtype"] == "can_use_tool" {
+					count++
+				}
+			}
+		}
+	}
+	return count
+}
+
+func countPermissionResponses(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		json.Unmarshal(scanner.Bytes(), &record)
+
+		if record["direction"] != "sent" {
+			continue
+		}
+
+		msg, ok := record["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if msg["type"] == "control_response" {
+			if resp, ok := msg["response"].(map[string]interface{}); ok {
+				if innerResp, ok := resp["response"].(map[string]interface{}); ok {
+					if _, hasBehavior := innerResp["behavior"]; hasBehavior {
+						count++
+					}
+				}
+			}
+		}
+	}
+	return count
+}
+
+func getToolsRequiringPermission(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	toolSet := make(map[string]bool)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		json.Unmarshal(scanner.Bytes(), &record)
+
+		if record["direction"] != "received" {
+			continue
+		}
+
+		msg, ok := record["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if msg["type"] == "control_request" {
+			if req, ok := msg["request"].(map[string]interface{}); ok {
+				if req["subtype"] == "can_use_tool" {
+					if toolName, ok := req["tool_name"].(string); ok {
+						toolSet[toolName] = true
+					}
+				}
+			}
+		}
+	}
+
+	var tools []string
+	for tool := range toolSet {
+		tools = append(tools, tool)
+	}
+	return tools
+}
+
+func printCanUseToolRequests(path string) {
 	f, err := os.Open(path)
 	if err != nil {
 		fmt.Printf("      Error: %v\n", err)
@@ -415,15 +623,83 @@ func printControlResponses(path string) {
 	found := false
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var msg map[string]interface{}
-		json.Unmarshal(scanner.Bytes(), &msg)
-		if msg["type"] == "control_response" {
-			found = true
-			prettyJson, _ := json.MarshalIndent(msg, "      ", "  ")
-			fmt.Printf("%s\n", prettyJson)
+		var record map[string]interface{}
+		json.Unmarshal(scanner.Bytes(), &record)
+
+		if record["direction"] != "received" {
+			continue
+		}
+
+		msg, ok := record["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if msg["type"] == "control_request" {
+			if req, ok := msg["request"].(map[string]interface{}); ok {
+				if req["subtype"] == "can_use_tool" {
+					found = true
+					toolName := req["tool_name"]
+					fmt.Printf("      tool_name: %v\n", toolName)
+					if input, ok := req["input"].(map[string]interface{}); ok {
+						inputJson, _ := json.Marshal(input)
+						if len(inputJson) > 100 {
+							fmt.Printf("      input: %s...\n", inputJson[:100])
+						} else {
+							fmt.Printf("      input: %s\n", inputJson)
+						}
+					}
+					if suggestions, ok := req["permission_suggestions"]; ok && suggestions != nil {
+						fmt.Printf("      permission_suggestions: %v\n", suggestions)
+					}
+				}
+			}
 		}
 	}
 	if !found {
 		fmt.Printf("      (none)\n")
 	}
 }
+
+func printPermissionResponsesSent(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		fmt.Printf("      Error: %v\n", err)
+		return
+	}
+	defer f.Close()
+
+	found := false
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		json.Unmarshal(scanner.Bytes(), &record)
+
+		if record["direction"] != "sent" {
+			continue
+		}
+
+		msg, ok := record["message"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if msg["type"] == "control_response" {
+			if resp, ok := msg["response"].(map[string]interface{}); ok {
+				if innerResp, ok := resp["response"].(map[string]interface{}); ok {
+					if behavior, hasBehavior := innerResp["behavior"]; hasBehavior {
+						found = true
+						fmt.Printf("      behavior: %v\n", behavior)
+						if message, ok := innerResp["message"]; ok {
+							fmt.Printf("      message: %v\n", message)
+						}
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		fmt.Printf("      (none)\n")
+	}
+}
+
