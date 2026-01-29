@@ -51,7 +51,7 @@ It helps you plan implementations by analyzing requirements and designing soluti
 	}
 
 	// Define flags
-	rootCmd.Flags().StringVar(&model, "model", "sonnet", "Model to use: haiku, sonnet, opus")
+	rootCmd.Flags().StringVar(&model, "model", "opus", "Model to use for planning: haiku, sonnet, opus")
 	rootCmd.Flags().StringVar(&workDir, "dir", "", "Working directory (defaults to current directory)")
 	rootCmd.Flags().StringVar(&recordDir, "record", ".planner-sessions", "Directory for session recordings")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt")
@@ -59,7 +59,7 @@ It helps you plan implementations by analyzing requirements and designing soluti
 	rootCmd.Flags().BoolVar(&simple, "simple", false, "Auto-answer questions with first option and export plan on completion")
 	rootCmd.Flags().StringVar(&build, "build", "", "After planning, execute: 'current' (same session) or 'new' (fresh session)")
 	rootCmd.Flags().StringVar(&externalBuilder, "external-builder", "", "Path to external builder executable (e.g., yoloswe). Used with --build new.")
-	rootCmd.Flags().StringVar(&buildModel, "build-model", "", "Model to use for build phase (defaults to --model if not specified)")
+	rootCmd.Flags().StringVar(&buildModel, "build-model", "sonnet", "Model to use for build phase (defaults to sonnet)")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
