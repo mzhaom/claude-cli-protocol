@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/yoloswe"
 	"github.com/spf13/cobra"
@@ -49,7 +51,7 @@ The loop continues until the reviewer accepts or limits are reached.`,
 	rootCmd.Flags().Float64Var(&budget, "budget", 100.0, "Max USD for builder session")
 	rootCmd.Flags().IntVar(&timeout, "timeout", 3600, "Max seconds")
 	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 100, "Max builder-reviewer iterations")
-	rootCmd.Flags().StringVar(&record, "record", ".swe-sessions", "Session recordings directory")
+	rootCmd.Flags().StringVar(&record, "record", "", "Session recordings directory (default: ~/.yoloswe)")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed output")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt for builder")
 	rootCmd.Flags().BoolVar(&requireApproval, "require-approval", false, "Require user approval for tool executions (default: auto-approve)")
@@ -74,11 +76,22 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Set default recording directory if not specified
+	recordingDir := record
+	if recordingDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting home directory: %v\n", err)
+			os.Exit(1)
+		}
+		recordingDir = filepath.Join(homeDir, ".yoloswe")
+	}
+
 	// Create config - use prompt as the goal for reviewer context
 	config := yoloswe.Config{
 		BuilderModel:    builderModel,
 		BuilderWorkDir:  workDir,
-		RecordingDir:    record,
+		RecordingDir:    recordingDir,
 		SystemPrompt:    systemPrompt,
 		RequireApproval: requireApproval,
 		ResumeSessionID: resumeSession,
