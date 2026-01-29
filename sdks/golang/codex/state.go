@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // ClientState represents the state of the client connection.
@@ -222,42 +223,71 @@ func (m *threadStateManager) Error() error {
 // WaitForReady blocks until the state becomes Ready, Closed, or an error occurs.
 // Returns nil if Ready, the startup error if one occurred, or ErrClientClosed if Closed.
 func (m *threadStateManager) WaitForReady(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Create channels to communicate with the wait goroutine
+	resultCh := make(chan error, 1)
+	stopCh := make(chan struct{})
 
-	for m.state != ThreadStateReady && m.state != ThreadStateClosed && m.startErr == nil {
-		// Check context before waiting
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+	// Spawn goroutine to wait on the condition
+	go func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
 
-		// Use a goroutine to handle context cancellation.
-		// Start before Wait() to avoid missing the cancellation.
-		done := make(chan struct{})
-		go func() {
+		for m.state != ThreadStateReady && m.state != ThreadStateClosed && m.startErr == nil {
+			// Non-blocking check for cancellation before waiting
 			select {
-			case <-ctx.Done():
-				m.cond.Broadcast()
-			case <-done:
+			case <-stopCh:
+				resultCh <- ctx.Err()
+				return
+			default:
 			}
-		}()
 
-		m.cond.Wait()
-		close(done)
+			// Wait for state change
+			m.cond.Wait()
 
-		// Check context after waking - could have been woken by cancellation
-		if ctx.Err() != nil {
-			return ctx.Err()
+			// Check for cancellation after waking up
+			select {
+			case <-stopCh:
+				resultCh <- ctx.Err()
+				return
+			default:
+			}
 		}
-	}
 
-	if m.startErr != nil {
-		return m.startErr
-	}
-	if m.state == ThreadStateClosed {
-		return ErrClientClosed
-	}
-	return nil
+		var err error
+		if m.startErr != nil {
+			err = m.startErr
+		} else if m.state == ThreadStateClosed {
+			err = ErrClientClosed
+		}
+		resultCh <- err
+	}()
+
+	// Goroutine to handle context cancellation
+	cancelDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			close(stopCh)
+			// Continuously broadcast to ensure we wake the waiter
+			// even if it hasn't entered Wait() yet
+			ticker := time.NewTicker(time.Microsecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-cancelDone:
+					return
+				case <-ticker.C:
+					m.cond.Broadcast()
+				}
+			}
+		case <-cancelDone:
+		}
+	}()
+
+	// Wait for result
+	err := <-resultCh
+	close(cancelDone)
+	return err
 }
 
 // IsClosed returns true if the thread is closed.

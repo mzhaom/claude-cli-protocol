@@ -365,3 +365,196 @@ func TestThreadStateManager_Error(t *testing.T) {
 		t.Errorf("Error() returned %v, want %v", err, testErr)
 	}
 }
+
+// TestThreadStateManager_WaitForReady_ConcurrentCancellation tests that
+// multiple concurrent WaitForReady calls with context cancellation don't deadlock.
+func TestThreadStateManager_WaitForReady_ConcurrentCancellation(t *testing.T) {
+	m := newThreadStateManager()
+
+	const numWaiters = 50
+	var wg sync.WaitGroup
+	errs := make(chan error, numWaiters)
+
+	// Launch many concurrent waiters
+	for i := 0; i < numWaiters; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Cancel immediately or after a short delay
+			if idx%2 == 0 {
+				cancel()
+			} else {
+				go func() {
+					time.Sleep(time.Millisecond)
+					cancel()
+				}()
+			}
+
+			err := m.WaitForReady(ctx)
+			errs <- err
+		}(i)
+	}
+
+	// Complete all waiters
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// Ensure all waiters complete (no deadlock)
+	select {
+	case <-done:
+		// Success
+	case <-time.After(5 * time.Second):
+		t.Fatal("WaitForReady deadlocked with concurrent cancellations")
+	}
+
+	// Verify all returned context errors
+	close(errs)
+	for err := range errs {
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	}
+}
+
+// TestThreadStateManager_WaitForReady_RapidCancellation tests rapid context
+// cancellation to ensure no race conditions or goroutine leaks.
+func TestThreadStateManager_WaitForReady_RapidCancellation(t *testing.T) {
+	const iterations = 100
+
+	for i := 0; i < iterations; i++ {
+		m := newThreadStateManager()
+		ctx, cancel := context.WithCancel(context.Background())
+
+		done := make(chan error, 1)
+		go func() {
+			done <- m.WaitForReady(ctx)
+		}()
+
+		// Cancel immediately without any sleep
+		cancel()
+
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("iteration %d: expected context.Canceled, got %v", i, err)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("iteration %d: WaitForReady did not return after immediate cancellation", i)
+		}
+	}
+}
+
+// TestThreadStateManager_WaitForReady_CancellationRaceWindow tests the specific
+// race condition where context is cancelled after the goroutine checks cancelCh
+// but before it enters cond.Wait(). This test uses rapid iteration to increase
+// the likelihood of hitting this narrow window.
+func TestThreadStateManager_WaitForReady_CancellationRaceWindow(t *testing.T) {
+	const iterations = 1000
+
+	for i := 0; i < iterations; i++ {
+		m := newThreadStateManager()
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// Start WaitForReady
+		done := make(chan error, 1)
+		go func() {
+			done <- m.WaitForReady(ctx)
+		}()
+
+		// Cancel immediately to try to hit the race window
+		// where the goroutine has started but hasn't entered Wait() yet
+		cancel()
+
+		// WaitForReady should return context.Canceled, not hang
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("iteration %d: expected context.Canceled, got %v", i, err)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("iteration %d: WaitForReady hung - likely hit the race window", i)
+		}
+	}
+}
+
+// TestThreadStateManager_WaitForReady_MixedCompletion tests concurrent waiters
+// where some complete successfully and others are cancelled.
+func TestThreadStateManager_WaitForReady_MixedCompletion(t *testing.T) {
+	m := newThreadStateManager()
+
+	const numWaiters = 20
+	var wg sync.WaitGroup
+	successCount := 0
+	cancelCount := 0
+	var mu sync.Mutex
+
+	// Launch waiters with different behaviors
+	for i := 0; i < numWaiters; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			var ctx context.Context
+			var cancel context.CancelFunc
+
+			if idx%3 == 0 {
+				// This waiter will be cancelled
+				ctx, cancel = context.WithCancel(context.Background())
+				go func() {
+					time.Sleep(5 * time.Millisecond)
+					cancel()
+				}()
+			} else {
+				// This waiter will complete successfully
+				ctx = context.Background()
+				cancel = func() {}
+			}
+			defer cancel()
+
+			err := m.WaitForReady(ctx)
+
+			mu.Lock()
+			if err == nil {
+				successCount++
+			} else if errors.Is(err, context.Canceled) {
+				cancelCount++
+			} else {
+				t.Errorf("unexpected error: %v", err)
+			}
+			mu.Unlock()
+		}(i)
+	}
+
+	// Let waiters start
+	time.Sleep(10 * time.Millisecond)
+
+	// Set ready to wake successful waiters
+	m.SetReady()
+
+	// Wait for all waiters to complete
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Logf("Success: %d, Cancelled: %d", successCount, cancelCount)
+		// Verify we got both types of completion
+		if successCount == 0 {
+			t.Error("expected some successful completions")
+		}
+		if cancelCount == 0 {
+			t.Error("expected some cancellations")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("WaitForReady deadlocked with mixed completion")
+	}
+}
