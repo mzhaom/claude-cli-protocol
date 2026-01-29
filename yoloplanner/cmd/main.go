@@ -33,6 +33,7 @@ var (
 	simple          bool
 	build           string
 	externalBuilder string
+	buildModel      string
 )
 
 func main() {
@@ -58,6 +59,7 @@ It helps you plan implementations by analyzing requirements and designing soluti
 	rootCmd.Flags().BoolVar(&simple, "simple", false, "Auto-answer questions with first option and export plan on completion")
 	rootCmd.Flags().StringVar(&build, "build", "", "After planning, execute: 'current' (same session) or 'new' (fresh session)")
 	rootCmd.Flags().StringVar(&externalBuilder, "external-builder", "", "Path to external builder executable (e.g., yoloswe). Used with --build new.")
+	rootCmd.Flags().StringVar(&buildModel, "build-model", "", "Model to use for build phase (defaults to --model if not specified)")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -104,6 +106,7 @@ func run(cmd *cobra.Command, args []string) {
 		Prompt:              prompt,
 		BuildMode:           buildMode,
 		ExternalBuilderPath: externalBuilder,
+		BuildModel:          buildModel,
 	}
 
 	// Create planner wrapper

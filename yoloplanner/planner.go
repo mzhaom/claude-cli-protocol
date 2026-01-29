@@ -183,6 +183,11 @@ type Config struct {
 	// When set with BuildMode "new", the external builder is launched instead
 	// of starting a fresh claude session.
 	ExternalBuilderPath string
+
+	// BuildModel is the model to use for build phase.
+	// If empty, uses Model for both planning and building.
+	// When set, planning uses Model and building uses BuildModel.
+	BuildModel string
 }
 
 // SessionStats tracks cumulative token usage and cost for a session phase.
@@ -598,9 +603,20 @@ func (p *PlannerWrapper) promptForFollowUp(ctx context.Context) (bool, error) {
 // executeInCurrentSession switches to bypass mode and continues implementation.
 func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, error) {
 	fmt.Println("\n→ Executing plan in current session...")
+
+	// Switch to bypass mode
 	if err := p.session.SetPermissionMode(ctx, claude.PermissionModeBypass); err != nil {
 		return false, fmt.Errorf("failed to switch permission mode: %w", err)
 	}
+
+	// Switch model if BuildModel is specified and different from current model
+	if p.config.BuildModel != "" && p.config.BuildModel != p.config.Model {
+		fmt.Printf("→ Switching to model: %s\n", p.config.BuildModel)
+		if err := p.session.SetModel(ctx, p.config.BuildModel); err != nil {
+			return false, fmt.Errorf("failed to switch model: %w", err)
+		}
+	}
+
 	// Signal that we're starting build execution.
 	// The next TurnComplete (from the planning turn that called ExitPlanMode) will:
 	// 1. Count that turn's stats as planning
@@ -643,8 +659,13 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	p.session.Stop()
 
 	// Start new session with bypass permissions (no plan mode)
+	// Use BuildModel if specified, otherwise fall back to Model
+	modelToUse := p.config.BuildModel
+	if modelToUse == "" {
+		modelToUse = p.config.Model
+	}
 	newOpts := []claude.SessionOption{
-		claude.WithModel(p.config.Model),
+		claude.WithModel(modelToUse),
 		claude.WithPermissionMode(claude.PermissionModeBypass),
 		claude.WithPermissionPromptToolStdio(),
 		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
@@ -779,8 +800,13 @@ func (p *PlannerWrapper) buildExternalBuilderArgs() []string {
 	args := []string{}
 
 	// Map model to builder-model
-	if p.config.Model != "" {
-		args = append(args, "--builder-model", p.config.Model)
+	// Use BuildModel if specified, otherwise fall back to Model
+	modelToUse := p.config.BuildModel
+	if modelToUse == "" {
+		modelToUse = p.config.Model
+	}
+	if modelToUse != "" {
+		args = append(args, "--builder-model", modelToUse)
 	}
 
 	// Map working directory
