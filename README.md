@@ -2,6 +2,33 @@
 
 Multi-language SDKs for the Claude CLI protocol, enabling programmatic interaction with Claude Code CLI.
 
+## Installation
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap mzhaom/claude-cli-protocol
+brew install claude-cli-tools
+```
+
+This installs:
+- `yoloplanner` - Multi-agent planning tool
+- `yoloswe` - Builder-reviewer loop for software engineering tasks
+- `sessionplayer` - Session replay tool
+
+### From Source
+
+```bash
+# Build individual tools
+cd yoloplanner && go build -o yoloplanner ./cmd
+cd yoloswe && go build -o yoloswe ./cmd
+cd tools/sessionplayer && go build -o sessionplayer ./cmd
+```
+
+### GitHub Releases
+
+Download pre-built binaries from the [Releases](https://github.com/mzhaom/claude-cli-protocol/releases) page.
+
 ## Repository Structure
 
 ```
