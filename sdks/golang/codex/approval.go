@@ -6,14 +6,22 @@ import "context"
 type ApprovalPolicy string
 
 const (
-	// ApprovalPolicySuggest prompts for approval on tool executions.
-	ApprovalPolicySuggest ApprovalPolicy = "suggest"
+	// ApprovalPolicyUntrusted requires approval for everything.
+	ApprovalPolicyUntrusted ApprovalPolicy = "untrusted"
 
-	// ApprovalPolicyAutoEdit auto-approves file edits but prompts for other tools.
-	ApprovalPolicyAutoEdit ApprovalPolicy = "auto-edit"
+	// ApprovalPolicyOnFailure approves unless command fails.
+	ApprovalPolicyOnFailure ApprovalPolicy = "on-failure"
 
-	// ApprovalPolicyFullAuto auto-approves all tool executions.
-	ApprovalPolicyFullAuto ApprovalPolicy = "full-auto"
+	// ApprovalPolicyOnRequest approves on explicit request.
+	ApprovalPolicyOnRequest ApprovalPolicy = "on-request"
+
+	// ApprovalPolicyNever auto-approves everything (use with caution).
+	ApprovalPolicyNever ApprovalPolicy = "never"
+
+	// Deprecated aliases for backwards compatibility
+	ApprovalPolicySuggest  ApprovalPolicy = "untrusted"
+	ApprovalPolicyAutoEdit ApprovalPolicy = "on-failure"
+	ApprovalPolicyFullAuto ApprovalPolicy = "never"
 )
 
 // ApprovalRequest contains data for an approval request.

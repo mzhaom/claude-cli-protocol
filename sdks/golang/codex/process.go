@@ -25,6 +25,9 @@ type processManager struct {
 	reader  *bufio.Reader
 	encoder *json.Encoder
 
+	// Session logging
+	sessionLog *os.File
+
 	started  bool
 	stopping bool
 }
@@ -79,6 +82,26 @@ func (pm *processManager) Start(ctx context.Context) error {
 	pm.reader = bufio.NewReader(pm.stdout)
 	pm.encoder = json.NewEncoder(pm.stdin)
 
+	// Set up session logging if configured
+	if pm.config.SessionLogPath != "" {
+		f, err := os.Create(pm.config.SessionLogPath)
+		if err != nil {
+			// Clean up pipes before killing
+			pm.stdin.Close()
+			pm.stdout.Close()
+			pm.stderr.Close()
+			pm.cmd.Process.Kill()
+			pm.cmd.Wait() // Reap the process
+			return &ProcessError{Message: "failed to create session log", Cause: err}
+		}
+		pm.sessionLog = f
+
+		// Write session log header
+		header := NewSessionLogHeader(pm.config.ClientName)
+		enc := json.NewEncoder(pm.sessionLog)
+		enc.Encode(header)
+	}
+
 	pm.started = true
 	return nil
 }
@@ -87,6 +110,7 @@ func (pm *processManager) Start(ctx context.Context) error {
 func (pm *processManager) ReadLine() ([]byte, error) {
 	pm.mu.Lock()
 	reader := pm.reader
+	sessionLog := pm.sessionLog
 	pm.mu.Unlock()
 
 	if reader == nil {
@@ -96,6 +120,11 @@ func (pm *processManager) ReadLine() ([]byte, error) {
 	line, err := reader.ReadBytes('\n')
 	if err != nil {
 		return nil, err
+	}
+
+	// Log to session file if configured
+	if sessionLog != nil {
+		pm.logMessage("received", line)
 	}
 
 	// Trim the newline
@@ -119,6 +148,12 @@ func (pm *processManager) WriteJSON(v interface{}) error {
 		return ErrStopping
 	}
 
+	// Log to session file if configured
+	if pm.sessionLog != nil {
+		data, _ := json.Marshal(v)
+		pm.logMessageLocked("sent", data)
+	}
+
 	return pm.encoder.Encode(v)
 }
 
@@ -137,6 +172,12 @@ func (pm *processManager) Stop() error {
 		return nil
 	}
 	pm.stopping = true
+
+	// Close session log
+	if pm.sessionLog != nil {
+		pm.sessionLog.Close()
+		pm.sessionLog = nil
+	}
 	pm.mu.Unlock()
 
 	// Close stdin to signal shutdown
@@ -197,4 +238,22 @@ func (pm *processManager) startStderrReader(handler func([]byte)) {
 // formatStderrLine formats a stderr line for logging.
 func formatStderrLine(data []byte) string {
 	return fmt.Sprintf("[codex stderr] %s", string(data))
+}
+
+// logMessage logs a message to the session log (acquires lock).
+func (pm *processManager) logMessage(direction string, data []byte) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.logMessageLocked(direction, data)
+}
+
+// logMessageLocked logs a message to the session log (caller must hold lock).
+func (pm *processManager) logMessageLocked(direction string, data []byte) {
+	if pm.sessionLog == nil {
+		return
+	}
+
+	entry := NewSessionLogEntry(direction, data)
+	enc := json.NewEncoder(pm.sessionLog)
+	enc.Encode(entry)
 }

@@ -19,6 +19,10 @@ type ClientConfig struct {
 
 	// ApprovalHandler handles tool execution approval requests.
 	ApprovalHandler ApprovalHandler
+
+	// SessionLogPath is the path to write session logs (JSON messages).
+	// If empty, no session logging is performed.
+	SessionLogPath string
 }
 
 func defaultClientConfig() ClientConfig {
@@ -71,6 +75,14 @@ func WithStderrHandler(h func([]byte)) ClientOption {
 func WithApprovalHandler(h ApprovalHandler) ClientOption {
 	return func(c *ClientConfig) {
 		c.ApprovalHandler = h
+	}
+}
+
+// WithSessionLogPath sets the path for session logging.
+// All JSON messages sent and received will be logged to this file.
+func WithSessionLogPath(path string) ClientOption {
+	return func(c *ClientConfig) {
+		c.SessionLogPath = path
 	}
 }
 

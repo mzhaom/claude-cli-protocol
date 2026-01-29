@@ -38,6 +38,18 @@ const (
 
 	// EventTypeStateChange fires on state transitions.
 	EventTypeStateChange
+
+	// EventTypeCommandStart fires when a shell command begins.
+	EventTypeCommandStart
+
+	// EventTypeCommandOutput fires for streaming command output.
+	EventTypeCommandOutput
+
+	// EventTypeCommandEnd fires when a shell command completes.
+	EventTypeCommandEnd
+
+	// EventTypeReasoningDelta fires for streaming reasoning/thinking text.
+	EventTypeReasoningDelta
 )
 
 // Event is the interface for all events.
@@ -171,3 +183,53 @@ type StateChangeEvent struct {
 
 // Type returns the event type.
 func (e StateChangeEvent) Type() EventType { return EventTypeStateChange }
+
+// CommandStartEvent fires when a shell command begins.
+type CommandStartEvent struct {
+	ThreadID  string
+	TurnID    string
+	CallID    string
+	Command   []string // e.g., ["/bin/zsh", "-lc", "ls"]
+	CWD       string
+	ParsedCmd string // Simplified command display
+}
+
+// Type returns the event type.
+func (e CommandStartEvent) Type() EventType { return EventTypeCommandStart }
+
+// CommandOutputEvent fires for streaming command output.
+type CommandOutputEvent struct {
+	ThreadID string
+	TurnID   string
+	CallID   string
+	Stream   string // "stdout" or "stderr"
+	Chunk    string
+}
+
+// Type returns the event type.
+func (e CommandOutputEvent) Type() EventType { return EventTypeCommandOutput }
+
+// CommandEndEvent fires when a shell command completes.
+type CommandEndEvent struct {
+	ThreadID   string
+	TurnID     string
+	CallID     string
+	ExitCode   int
+	Stdout     string
+	Stderr     string
+	DurationMs int64
+}
+
+// Type returns the event type.
+func (e CommandEndEvent) Type() EventType { return EventTypeCommandEnd }
+
+// ReasoningDeltaEvent fires for streaming reasoning/thinking text.
+type ReasoningDeltaEvent struct {
+	ThreadID string
+	TurnID   string
+	ItemID   string
+	Delta    string
+}
+
+// Type returns the event type.
+func (e ReasoningDeltaEvent) Type() EventType { return EventTypeReasoningDelta }

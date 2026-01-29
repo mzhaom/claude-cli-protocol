@@ -1,0 +1,96 @@
+package reviewer
+
+import (
+	"testing"
+
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/codex"
+)
+
+func TestBuildPrompt(t *testing.T) {
+	tests := []struct {
+		name     string
+		goal     string
+		contains []string
+	}{
+		{
+			name: "with goal",
+			goal: "add user authentication",
+			contains: []string{
+				"add user authentication",
+				"experienced software engineer",
+				"reviewing changes",
+			},
+		},
+		{
+			name: "empty goal",
+			goal: "",
+			contains: []string{
+				"(not specified)",
+				"experienced software engineer",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := BuildPrompt(tt.goal)
+			for _, s := range tt.contains {
+				if !containsString(prompt, s) {
+					t.Errorf("BuildPrompt(%q) should contain %q", tt.goal, s)
+				}
+			}
+		})
+	}
+}
+
+func TestNew_DefaultValues(t *testing.T) {
+	r := New(Config{})
+
+	if r.config.Model != "gpt-5.2-codex" {
+		t.Errorf("expected default model gpt-5.2-codex, got %s", r.config.Model)
+	}
+	if r.config.ApprovalPolicy != codex.ApprovalPolicyOnFailure {
+		t.Errorf("expected default approval policy on-failure, got %s", r.config.ApprovalPolicy)
+	}
+	if r.output == nil {
+		t.Error("output should not be nil")
+	}
+	if r.verbose != nil {
+		t.Error("verbose should be nil by default")
+	}
+}
+
+func TestNew_WithVerbose(t *testing.T) {
+	r := New(Config{Verbose: true})
+
+	if r.verbose == nil {
+		t.Error("verbose should not be nil when Verbose is true")
+	}
+}
+
+func TestNew_WithCustomValues(t *testing.T) {
+	r := New(Config{
+		Model:          "gpt-4o",
+		ApprovalPolicy: codex.ApprovalPolicyNever,
+	})
+
+	if r.config.Model != "gpt-4o" {
+		t.Errorf("expected model gpt-4o, got %s", r.config.Model)
+	}
+	if r.config.ApprovalPolicy != codex.ApprovalPolicyNever {
+		t.Errorf("expected approval policy never, got %s", r.config.ApprovalPolicy)
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStringHelper(s, substr))
+}
+
+func containsStringHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
