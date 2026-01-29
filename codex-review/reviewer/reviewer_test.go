@@ -43,6 +43,55 @@ func TestBuildPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildJSONPrompt(t *testing.T) {
+	tests := []struct {
+		name     string
+		goal     string
+		contains []string
+	}{
+		{
+			name: "with goal",
+			goal: "add user authentication",
+			contains: []string{
+				"add user authentication",
+				"experienced software engineer",
+				"reviewing changes",
+				"JSON",
+				"verdict",
+				"accepted",
+				"rejected",
+				"summary",
+				"issues",
+				"severity",
+				"critical",
+				"high",
+				"medium",
+				"low",
+			},
+		},
+		{
+			name: "empty goal",
+			goal: "",
+			contains: []string{
+				"(not specified)",
+				"JSON",
+				"verdict",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := BuildJSONPrompt(tt.goal)
+			for _, s := range tt.contains {
+				if !containsString(prompt, s) {
+					t.Errorf("BuildJSONPrompt(%q) should contain %q", tt.goal, s)
+				}
+			}
+		})
+	}
+}
+
 func TestNew_DefaultValues(t *testing.T) {
 	r := New(Config{})
 

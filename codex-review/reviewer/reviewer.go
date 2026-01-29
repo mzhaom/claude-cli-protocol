@@ -21,6 +21,7 @@ type Config struct {
 	Verbose        bool                 // Show progress information (tool use, etc.)
 	NoColor        bool                 // Disable ANSI color codes
 	ApprovalPolicy codex.ApprovalPolicy // Tool approval policy (default: on-failure)
+	JSONOutput     bool                 // Request JSON output format instead of text
 }
 
 // BuildPrompt creates the review prompt from the config.
@@ -44,6 +45,56 @@ When you flag an issue, provide a short, direct explanation and cite the affecte
 Prioritize severe issues and avoid nit-level comments unless they block understanding of the diff.
 After listing findings, produce an overall correctness verdict ("patch is correct" or "patch is incorrect") with a concise justification and a confidence score between 0 and 1.
 Ensure that file citations and line numbers are exactly correct using the tools available; if they are incorrect your comments will be rejected.`, goalText)
+}
+
+// BuildJSONPrompt creates a review prompt that requests JSON output format.
+func BuildJSONPrompt(goal string) string {
+	goalText := goal
+	if goalText == "" {
+		goalText = "(not specified)"
+	}
+
+	return fmt.Sprintf(`You are experienced software engineer, reviewing changes by another engineer on this branch (this is using git worktree). The main goal of the change on this branch is %s.
+
+Focus on these areas:
+- Is the implementation correct? Is there any gap that should be addressed.
+- Does it provide sufficient test coverage about the code path it touched.
+- maintainability. also look at code around it, is there any code duplication that can be avoided.
+- developer experience.
+- performance.
+- security.
+
+When you flag an issue, provide a short, direct explanation and cite the affected file and line range.
+Prioritize severe issues and avoid nit-level comments unless they block understanding of the diff.
+Ensure that file citations and line numbers are exactly correct using the tools available; if they are incorrect your comments will be rejected.
+
+## Output Format
+You MUST respond with valid JSON in this exact format:
+{
+  "verdict": "accepted" or "rejected",
+  "summary": "Brief overall assessment of the changes",
+  "issues": [
+    {
+      "severity": "critical|high|medium|low",
+      "file": "path/to/file.go",
+      "line": 42,
+      "message": "Description of the issue",
+      "suggestion": "How to fix it"
+    }
+  ]
+}
+
+## Severity Levels
+- critical: Bugs, security vulnerabilities, broken functionality, data loss risks
+- high: Missing error handling, incorrect logic that could cause failures
+- medium: Code style issues, minor inefficiencies, missing edge cases
+- low: Naming preferences, formatting, optional improvements
+
+## Rules
+- verdict MUST be exactly "accepted" or "rejected"
+- If there are any critical or high severity issues, verdict MUST be "rejected"
+- issues array can be empty if verdict is "accepted"
+- Output ONLY the JSON object, no other text`, goalText)
 }
 
 // ReviewResult contains the result of a review turn.

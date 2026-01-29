@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
@@ -76,6 +77,9 @@ func (b *BuilderSession) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the session.
 func (b *BuilderSession) Stop() error {
+	if b == nil {
+		return nil
+	}
 	if b.session != nil {
 		return b.session.Stop()
 	}
@@ -85,6 +89,22 @@ func (b *BuilderSession) Stop() error {
 // RunTurn sends a message and processes the turn until completion.
 // Returns the turn usage for budget tracking.
 func (b *BuilderSession) RunTurn(ctx context.Context, message string) (*claude.TurnUsage, error) {
+	// Validate inputs
+	if b == nil {
+		return nil, fmt.Errorf("builder session is nil")
+	}
+	if b.session == nil {
+		return nil, fmt.Errorf("session not started")
+	}
+	if strings.TrimSpace(message) == "" {
+		return nil, fmt.Errorf("message cannot be empty")
+	}
+
+	// Additional context validation
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+
 	_, err := b.session.SendMessage(ctx, message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send message: %w", err)
@@ -128,37 +148,78 @@ func (b *BuilderSession) RunTurn(ctx context.Context, message string) (*claude.T
 
 			case claude.TurnCompleteEvent:
 				b.renderer.TurnSummary(e.TurnNumber, e.Success, e.DurationMs, e.Usage.CostUSD)
+				if !e.Success {
+					return &e.Usage, fmt.Errorf("turn completed with success=false")
+				}
 				return &e.Usage, nil
 
 			case claude.ErrorEvent:
 				b.renderer.Error(e.Error, e.Context)
-				return nil, e.Error
+				// Return partial usage if available, along with error
+				return nil, fmt.Errorf("builder error: %v (context: %s)", e.Error, e.Context)
 			}
 		}
 	}
 }
 
-// autoAnswerQuestion extracts the first option from an AskUserQuestion input
-// and formats a response.
+// autoAnswerQuestion automatically responds to AskUserQuestion prompts from the builder.
+// This enables autonomous operation by selecting reasonable defaults without user intervention.
+//
+// The function implements intelligent fallback logic:
+//  1. For questions with explicit options: selects the first option
+//  2. For multi-select questions: selects only the first option (conservative approach)
+//  3. For questions without options: infers answer based on question keywords
+//     - "continue", "proceed", "confirm" -> "yes"
+//     - "which", "select", "choose" -> "first option"
+//     - default -> "yes"
+//  4. For malformed or missing questions: returns safe default message
+//
+// Parameters:
+//   - input: The AskUserQuestion tool input containing questions array
+//
+// Returns:
+//   - A formatted string response suitable for SendToolResult
+//
+// Edge cases handled:
+//   - nil input map
+//   - missing or malformed questions array
+//   - questions without text or options
+//   - options as strings vs. objects with label/description
+//   - multiSelect flag handling
 func (b *BuilderSession) autoAnswerQuestion(input map[string]interface{}) string {
+	// Validate input structure
+	if input == nil {
+		b.renderer.Status("Auto-answering: no questions provided, proceeding with default")
+		return "Proceeding with default option."
+	}
+
 	questions, ok := input["questions"].([]interface{})
 	if !ok || len(questions) == 0 {
+		b.renderer.Status("Auto-answering: no questions array found, proceeding with default")
 		return "Proceeding with default option."
 	}
 
 	var responses []string
-	for _, q := range questions {
+	for i, q := range questions {
 		qMap, ok := q.(map[string]interface{})
 		if !ok {
+			b.renderer.Status(fmt.Sprintf("Auto-answering: skipping malformed question %d", i))
 			continue
 		}
 
 		question, _ := qMap["question"].(string)
+		if question == "" {
+			question = fmt.Sprintf("Question %d", i+1)
+		}
+
+		// Check for multiSelect flag
+		multiSelect, _ := qMap["multiSelect"].(bool)
+
 		optionsRaw, _ := qMap["options"].([]interface{})
 
 		var response string
 		if len(optionsRaw) > 0 {
-			// Parse first option
+			// Parse first option (or multiple if multiSelect)
 			opt := optionsRaw[0]
 			switch v := opt.(type) {
 			case string:
@@ -166,14 +227,44 @@ func (b *BuilderSession) autoAnswerQuestion(input map[string]interface{}) string
 			case map[string]interface{}:
 				if label, ok := v["label"].(string); ok {
 					response = label
+				} else if desc, ok := v["description"].(string); ok {
+					// Fallback to description if no label
+					response = desc
+				} else {
+					response = "Option 1"
 				}
+			default:
+				response = "Option 1"
 			}
-			b.renderer.Status(fmt.Sprintf("Auto-answering question: %s -> %s", question, response))
+
+			// For multiSelect, only select first option
+			if multiSelect && len(optionsRaw) > 1 {
+				b.renderer.Status(fmt.Sprintf("Auto-answering (multi-select): %s -> %s (selecting first option only)", question, response))
+			} else {
+				b.renderer.Status(fmt.Sprintf("Auto-answering: %s -> %s", question, response))
+			}
 		} else {
-			response = "yes"
-			b.renderer.Status(fmt.Sprintf("Auto-answering question: %s -> %s", question, response))
+			// No options provided, use intelligent default
+			questionLower := strings.ToLower(question)
+			if strings.Contains(questionLower, "continue") ||
+				strings.Contains(questionLower, "proceed") ||
+				strings.Contains(questionLower, "confirm") {
+				response = "yes"
+			} else if strings.Contains(questionLower, "which") ||
+				strings.Contains(questionLower, "select") ||
+				strings.Contains(questionLower, "choose") {
+				response = "first option"
+			} else {
+				response = "yes"
+			}
+			b.renderer.Status(fmt.Sprintf("Auto-answering (no options): %s -> %s", question, response))
 		}
+
 		responses = append(responses, fmt.Sprintf("Q: %s\nA: %s", question, response))
+	}
+
+	if len(responses) == 0 {
+		return "Proceeding with default option."
 	}
 
 	return "User responses:\n" + joinStrings(responses, "\n")
@@ -192,6 +283,9 @@ func joinStrings(strs []string, sep string) string {
 
 // RecordingPath returns the path to the session recording directory.
 func (b *BuilderSession) RecordingPath() string {
+	if b == nil {
+		return ""
+	}
 	if b.session != nil {
 		return b.session.RecordingPath()
 	}

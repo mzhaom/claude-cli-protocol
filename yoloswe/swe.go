@@ -1,7 +1,70 @@
+// Package yoloswe implements a builder-reviewer loop for autonomous software engineering.
+//
+// # Architecture
+//
+// The package orchestrates two AI agents in an iterative loop:
+//   - Builder: Claude SDK session that implements code changes
+//   - Reviewer: Codex SDK session that reviews changes and provides feedback
+//
+// # Flow
+//
+//  1. Builder receives initial prompt and implements changes
+//  2. Reviewer examines the changes and returns a verdict (accepted/rejected) with feedback
+//  3. If rejected, feedback is sent back to builder for another iteration
+//  4. Loop continues until accepted or limits reached (budget/time/iterations)
+//
+// # Safety and Limits
+//
+// Multiple safety mechanisms prevent runaway execution:
+//   - Budget limit: Hard cap on builder API costs
+//   - Time limit: Wall-clock timeout for entire session
+//   - Iteration limit: Maximum number of builder-reviewer cycles
+//   - Context cancellation: Proper Ctrl+C handling with cleanup
+//
+// # Key Features
+//
+//   - Auto-approval mode: Builder autonomously executes tools without user prompts
+//   - Robust parsing: Handles various JSON response formats from reviewer
+//   - Error recovery: Graceful handling of session failures and network issues
+//   - Input validation: Comprehensive validation of all configuration and prompts
+//   - Session recording: Optional recording of all interactions for debugging
+//
+// # Example Usage
+//
+//	config := yoloswe.Config{
+//	    BuilderModel:   "sonnet",
+//	    ReviewerModel:  "gpt-5.2-codex",
+//	    BuilderWorkDir: "/path/to/project",
+//	    MaxBudgetUSD:   5.0,
+//	    MaxTimeSeconds: 600,
+//	    MaxIterations:  10,
+//	}
+//
+//	swe := yoloswe.New(config)
+//	ctx := context.Background()
+//
+//	if err := swe.Run(ctx, "Add unit tests for the authentication module"); err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	swe.PrintSummary()
+//	stats := swe.Stats()
+//	// Check stats.ExitReason to determine outcome
+//
+// # Exit Reasons
+//
+// The loop can exit for several reasons (see ExitReason constants):
+//   - ExitReasonAccepted: Reviewer approved the changes (success)
+//   - ExitReasonBudgetExceeded: Builder costs exceeded budget limit
+//   - ExitReasonTimeExceeded: Wall-clock time exceeded timeout
+//   - ExitReasonMaxIterations: Reached maximum iteration count
+//   - ExitReasonError: Unrecoverable error occurred
+//   - ExitReasonInterrupt: User cancelled with Ctrl+C
 package yoloswe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -57,10 +120,28 @@ type Stats struct {
 	ExitReason       ExitReason
 }
 
+// ReviewIssue represents a single issue found during review.
+type ReviewIssue struct {
+	Severity   string `json:"severity"`
+	File       string `json:"file"`
+	Line       int    `json:"line,omitempty"`
+	Message    string `json:"message"`
+	Suggestion string `json:"suggestion,omitempty"`
+}
+
+// ReviewVerdictJSON is the JSON structure returned by the reviewer.
+type ReviewVerdictJSON struct {
+	Verdict string        `json:"verdict"`
+	Summary string        `json:"summary"`
+	Issues  []ReviewIssue `json:"issues,omitempty"`
+}
+
 // ReviewVerdict represents the reviewer's decision.
 type ReviewVerdict struct {
 	Accepted bool
-	Feedback string
+	Summary  string
+	Issues   []ReviewIssue
+	Feedback string // Formatted feedback for builder
 }
 
 // SWEWrapper orchestrates the builder-reviewer loop.
@@ -74,25 +155,8 @@ type SWEWrapper struct {
 
 // New creates a new SWEWrapper with the given configuration.
 func New(config Config) *SWEWrapper {
-	// Apply defaults
-	if config.BuilderModel == "" {
-		config.BuilderModel = "sonnet"
-	}
-	if config.ReviewerModel == "" {
-		config.ReviewerModel = "gpt-5.2-codex"
-	}
-	if config.RecordingDir == "" {
-		config.RecordingDir = ".swe-sessions"
-	}
-	if config.MaxBudgetUSD <= 0 {
-		config.MaxBudgetUSD = 5.0
-	}
-	if config.MaxTimeSeconds <= 0 {
-		config.MaxTimeSeconds = 600 // 10 minutes
-	}
-	if config.MaxIterations <= 0 {
-		config.MaxIterations = 10
-	}
+	// Sanitize and apply defaults
+	SanitizeConfig(&config)
 
 	output := os.Stdout
 
@@ -107,12 +171,13 @@ func New(config Config) *SWEWrapper {
 	}
 	builder := NewBuilderSession(builderConfig, output)
 
-	// Create reviewer
+	// Create reviewer with JSON output enabled for reliable parsing
 	reviewerConfig := reviewer.Config{
-		Model:   config.ReviewerModel,
-		WorkDir: config.BuilderWorkDir,
-		Goal:    config.Goal,
-		Verbose: config.Verbose,
+		Model:      config.ReviewerModel,
+		WorkDir:    config.BuilderWorkDir,
+		Goal:       config.Goal,
+		Verbose:    config.Verbose,
+		JSONOutput: true,
 	}
 	rev := reviewer.New(reviewerConfig)
 
@@ -126,21 +191,66 @@ func New(config Config) *SWEWrapper {
 
 // Run executes the builder-reviewer loop with the given initial prompt.
 func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
+	// Defensive nil checks
+	if s == nil {
+		return fmt.Errorf("SWEWrapper is nil")
+	}
+	if ctx == nil {
+		s.stats.ExitReason = ExitReasonError
+		return fmt.Errorf("context cannot be nil")
+	}
+	if s.builder == nil {
+		s.stats.ExitReason = ExitReasonError
+		return fmt.Errorf("builder not initialized")
+	}
+	if s.reviewer == nil {
+		s.stats.ExitReason = ExitReasonError
+		return fmt.Errorf("reviewer not initialized")
+	}
+
+	// Validate prompt
+	if err := ValidatePrompt(prompt); err != nil {
+		s.stats.ExitReason = ExitReasonError
+		return fmt.Errorf("invalid prompt: %w", err)
+	}
+
 	startTime := time.Now()
 
 	// Start builder session
 	fmt.Fprintln(s.output, "\n=== Starting Builder Session ===")
 	if err := s.builder.Start(ctx); err != nil {
+		s.stats.ExitReason = ExitReasonError
 		return fmt.Errorf("failed to start builder: %w", err)
 	}
-	defer s.builder.Stop()
+	defer func() {
+		if err := s.builder.Stop(); err != nil {
+			fmt.Fprintf(s.output, "Warning: error stopping builder: %v\n", err)
+		}
+	}()
+
+	// Check if context was cancelled during builder start
+	if ctx.Err() == context.Canceled {
+		s.stats.ExitReason = ExitReasonInterrupt
+		return nil
+	}
 
 	// Start reviewer
 	fmt.Fprintln(s.output, "\n=== Starting Reviewer Session ===")
 	if err := s.reviewer.Start(ctx); err != nil {
+		s.stats.ExitReason = ExitReasonError
 		return fmt.Errorf("failed to start reviewer: %w", err)
 	}
-	defer s.reviewer.Stop()
+	defer func() {
+		if err := s.reviewer.Stop(); err != nil {
+			fmt.Fprintf(s.output, "Warning: error stopping reviewer: %v\n", err)
+		}
+	}()
+
+	// Check if context was cancelled during reviewer start
+	if ctx.Err() == context.Canceled {
+		s.stats.ExitReason = ExitReasonInterrupt
+		return nil
+	}
 
 	currentMessage := prompt
 	isFirstReview := true
@@ -165,10 +275,18 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 		if err != nil {
 			if ctx.Err() == context.Canceled {
 				s.stats.ExitReason = ExitReasonInterrupt
+				fmt.Fprintln(s.output, "\n=== Builder interrupted by user ===")
 				return nil
 			}
 			s.stats.ExitReason = ExitReasonError
+			fmt.Fprintf(s.output, "\n=== Builder failed: %v ===\n", err)
 			return fmt.Errorf("builder error: %w", err)
+		}
+
+		// Validate builder usage response
+		if builderUsage == nil {
+			s.stats.ExitReason = ExitReasonError
+			return fmt.Errorf("builder returned nil usage")
 		}
 
 		// Update builder stats
@@ -202,10 +320,18 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 		if err != nil {
 			if ctx.Err() == context.Canceled {
 				s.stats.ExitReason = ExitReasonInterrupt
+				fmt.Fprintln(s.output, "\n=== Reviewer interrupted by user ===")
 				return nil
 			}
 			s.stats.ExitReason = ExitReasonError
+			fmt.Fprintf(s.output, "\n=== Reviewer failed: %v ===\n", err)
 			return fmt.Errorf("reviewer error: %w", err)
+		}
+
+		// Validate reviewer result
+		if reviewResult == nil {
+			s.stats.ExitReason = ExitReasonError
+			return fmt.Errorf("reviewer returned nil result")
 		}
 
 		// Update reviewer stats
@@ -243,7 +369,7 @@ Please address this feedback and improve the implementation.`, verdict.Feedback)
 
 // buildInitialReviewPrompt creates the prompt for the first review.
 func (s *SWEWrapper) buildInitialReviewPrompt() string {
-	return reviewer.BuildPrompt(s.config.Goal)
+	return reviewer.BuildJSONPrompt(s.config.Goal)
 }
 
 // buildFollowUpPrompt creates the prompt for follow-up reviews.
@@ -253,27 +379,226 @@ func (s *SWEWrapper) buildFollowUpPrompt() string {
 Please review the current state of the changes and provide an updated verdict.
 
 Focus on whether the previous issues have been addressed correctly.
-After your analysis, produce an overall correctness verdict ("patch is correct" or "patch is incorrect") with a concise justification.`
+
+## Output Format
+You MUST respond with valid JSON in this exact format:
+{
+  "verdict": "accepted" or "rejected",
+  "summary": "Brief overall assessment of the changes",
+  "issues": [
+    {
+      "severity": "critical|high|medium|low",
+      "file": "path/to/file.go",
+      "line": 42,
+      "message": "Description of the issue",
+      "suggestion": "How to fix it"
+    }
+  ]
 }
 
-// parseVerdict extracts the acceptance decision from the reviewer's response.
+## Rules
+- verdict MUST be exactly "accepted" or "rejected"
+- If there are any critical or high severity issues, verdict MUST be "rejected"
+- issues array can be empty if verdict is "accepted"
+- Output ONLY the JSON object, no other text`
+}
+
+// parseVerdict extracts the acceptance decision from the reviewer's JSON response.
 func (s *SWEWrapper) parseVerdict(text string) *ReviewVerdict {
-	upper := strings.ToUpper(text)
-
-	// Match the codex-review prompt which asks for "patch is correct" or "patch is incorrect"
-	if strings.Contains(upper, "PATCH IS CORRECT") {
-		return &ReviewVerdict{Accepted: true}
+	if text == "" {
+		return &ReviewVerdict{
+			Accepted: false,
+			Feedback: "Empty response from reviewer",
+		}
 	}
 
-	// Also accept explicit VERDICT: ACCEPTED
-	if strings.Contains(upper, "VERDICT: ACCEPTED") {
-		return &ReviewVerdict{Accepted: true}
+	jsonStr := extractJSON(text)
+	if jsonStr == "" {
+		return &ReviewVerdict{
+			Accepted: false,
+			Feedback: fmt.Sprintf("No JSON found in response: %s", truncateString(text, 200)),
+		}
 	}
+
+	var result ReviewVerdictJSON
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return &ReviewVerdict{
+			Accepted: false,
+			Feedback: fmt.Sprintf("Failed to parse reviewer JSON: %v\nRaw response: %s", err, truncateString(text, 200)),
+		}
+	}
+
+	// Trim whitespace from verdict for robust comparison
+	verdict := strings.TrimSpace(result.Verdict)
+	accepted := strings.EqualFold(verdict, "accepted")
 
 	return &ReviewVerdict{
-		Accepted: false,
-		Feedback: text,
+		Accepted: accepted,
+		Summary:  result.Summary,
+		Issues:   result.Issues,
+		Feedback: formatFeedback(result),
 	}
+}
+
+// truncateString truncates a string to maxLen characters, adding "..." if truncated.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// extractJSON attempts to extract JSON from a string that might contain markdown.
+// This function handles multiple formats commonly seen in LLM responses:
+//
+// Supported formats:
+//   1. JSON in markdown code blocks: ```json\n{...}\n```
+//   2. JSON in generic code blocks: ```\n{...}\n```
+//   3. Raw JSON embedded in text: "Here is the result: {...}"
+//   4. Plain JSON without surrounding text
+//
+// The function prioritizes code blocks over inline JSON and returns the first
+// complete JSON structure found (either object {...} or array [...]).
+//
+// For inline JSON, it properly handles:
+//   - Nested objects and arrays
+//   - Escaped characters within strings
+//   - String boundaries (ignores braces inside strings)
+//
+// Returns the original text unchanged if no valid JSON structure is found.
+func extractJSON(text string) string {
+	if text == "" {
+		return ""
+	}
+
+	// Check if the text contains a JSON code block
+	if idx := strings.Index(text, "```json"); idx != -1 {
+		start := idx + 7
+		end := strings.Index(text[start:], "```")
+		if end != -1 {
+			return strings.TrimSpace(text[start : start+end])
+		}
+	}
+
+	// Check for generic code block
+	if idx := strings.Index(text, "```"); idx != -1 {
+		start := idx + 3
+		if newline := strings.Index(text[start:], "\n"); newline != -1 {
+			start += newline + 1
+		}
+		end := strings.Index(text[start:], "```")
+		if end != -1 {
+			return strings.TrimSpace(text[start : start+end])
+		}
+	}
+
+	// Try to find JSON object directly (handles both objects and arrays)
+	startChars := []byte{'{', '['}
+	for _, startChar := range startChars {
+		if idx := strings.IndexByte(text, startChar); idx != -1 {
+			extracted := extractBalancedJSON(text, idx, startChar)
+			if extracted != "" {
+				return extracted
+			}
+		}
+	}
+
+	return text
+}
+
+// extractBalancedJSON extracts a balanced JSON structure starting at idx.
+// This function correctly handles:
+//   - Nested braces/brackets of arbitrary depth
+//   - Escaped characters (\", \\, etc.) within strings
+//   - Braces and brackets inside string values
+//
+// Parameters:
+//   - text: The text to extract from
+//   - idx: Starting index of the JSON structure
+//   - startChar: Either '{' for objects or '[' for arrays
+//
+// Returns:
+//   - The complete balanced JSON structure including start and end characters
+//   - Empty string if the structure is incomplete (unbalanced)
+//
+// Algorithm:
+//   - Maintains depth counter for nested structures
+//   - Tracks string state to ignore structural characters in strings
+//   - Handles escape sequences correctly
+func extractBalancedJSON(text string, idx int, startChar byte) string {
+	var endChar byte
+	if startChar == '{' {
+		endChar = '}'
+	} else {
+		endChar = ']'
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+
+	for i := idx; i < len(text); i++ {
+		char := text[i]
+
+		// Handle escape sequences in strings
+		if escaped {
+			escaped = false
+			continue
+		}
+		if char == '\\' {
+			escaped = true
+			continue
+		}
+
+		// Handle string boundaries
+		if char == '"' {
+			inString = !inString
+			continue
+		}
+
+		// Only count braces/brackets outside of strings
+		if !inString {
+			if char == startChar {
+				depth++
+			} else if char == endChar {
+				depth--
+				if depth == 0 {
+					return text[idx : i+1]
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// formatFeedback formats the JSON verdict into a readable feedback string for the builder.
+func formatFeedback(result ReviewVerdictJSON) string {
+	if len(result.Issues) == 0 {
+		return result.Summary
+	}
+
+	var sb strings.Builder
+	sb.WriteString(result.Summary)
+	sb.WriteString("\n\nIssues to address:\n")
+
+	for i, issue := range result.Issues {
+		sb.WriteString(fmt.Sprintf("\n%d. [%s] %s", i+1, strings.ToUpper(issue.Severity), issue.Message))
+		if issue.File != "" {
+			sb.WriteString(fmt.Sprintf("\n   File: %s", issue.File))
+			if issue.Line > 0 {
+				sb.WriteString(fmt.Sprintf(":%d", issue.Line))
+			}
+		}
+		if issue.Suggestion != "" {
+			sb.WriteString(fmt.Sprintf("\n   Suggestion: %s", issue.Suggestion))
+		}
+	}
+
+	return sb.String()
 }
 
 // PrintSummary prints the final statistics.
