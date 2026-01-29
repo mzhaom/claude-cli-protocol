@@ -14,7 +14,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,44 +21,65 @@ import (
 	"syscall"
 
 	"github.com/mzhaom/claude-cli-protocol/yoloplanner"
+	"github.com/spf13/cobra"
+)
+
+var (
+	model           string
+	workDir         string
+	recordDir       string
+	systemPrompt    string
+	verbose         bool
+	simple          bool
+	build           string
+	externalBuilder string
 )
 
 func main() {
-	// Parse flags
-	model := flag.String("model", "sonnet", "Model to use: haiku, sonnet, opus")
-	workDir := flag.String("dir", "", "Working directory (defaults to current directory)")
-	recordDir := flag.String("record", ".planner-sessions", "Directory for session recordings")
-	systemPrompt := flag.String("system", "", "Custom system prompt")
-	verbose := flag.Bool("verbose", false, "Show detailed tool results (errors are always shown)")
-	simple := flag.Bool("simple", false, "Auto-answer questions with first option and export plan on completion")
-	build := flag.String("build", "", "After planning, execute: 'current' (same session) or 'new' (fresh session)")
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <prompt>\n\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "A simple wrapper over claude-cli for planner mode.")
-		fmt.Fprintln(os.Stderr, "\nFlags:")
-		flag.PrintDefaults()
-		fmt.Fprintln(os.Stderr, "\nExamples:")
-		fmt.Fprintln(os.Stderr, "  yoloplanner \"Create a hello world Go program\"")
-		fmt.Fprintln(os.Stderr, "  yoloplanner -model opus \"Implement a REST API\"")
-		fmt.Fprintln(os.Stderr, "  echo \"Add tests\" | yoloplanner")
+	rootCmd := &cobra.Command{
+		Use:   "yoloplanner [flags] <prompt>",
+		Short: "A simple wrapper over claude-cli for planner mode",
+		Long: `yoloplanner is a simple wrapper over claude-cli for planner mode.
+It helps you plan implementations by analyzing requirements and designing solutions.`,
+		Example: `  yoloplanner "Create a hello world Go program"
+  yoloplanner -model opus "Implement a REST API"
+  echo "Add tests" | yoloplanner
+  yoloplanner --build new --external-builder ./yoloswe "Add comprehensive tests"`,
+		Args: cobra.ArbitraryArgs,
+		Run:  run,
 	}
-	flag.Parse()
 
+	// Define flags
+	rootCmd.Flags().StringVar(&model, "model", "sonnet", "Model to use: haiku, sonnet, opus")
+	rootCmd.Flags().StringVar(&workDir, "dir", "", "Working directory (defaults to current directory)")
+	rootCmd.Flags().StringVar(&recordDir, "record", ".planner-sessions", "Directory for session recordings")
+	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt")
+	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed tool results (errors are always shown)")
+	rootCmd.Flags().BoolVar(&simple, "simple", false, "Auto-answer questions with first option and export plan on completion")
+	rootCmd.Flags().StringVar(&build, "build", "", "After planning, execute: 'current' (same session) or 'new' (fresh session)")
+	rootCmd.Flags().StringVar(&externalBuilder, "external-builder", "", "Path to external builder executable (e.g., yoloswe). Used with --build new.")
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run(cmd *cobra.Command, args []string) {
 	// Get prompt from args or stdin
-	prompt := strings.Join(flag.Args(), " ")
+	prompt := strings.Join(args, " ")
 	if prompt == "" {
 		prompt = readFromStdin()
 	}
 	if prompt == "" {
 		fmt.Fprintln(os.Stderr, "Error: no prompt provided")
-		flag.Usage()
+		cmd.Usage()
 		os.Exit(1)
 	}
 
 	// Set default working directory
-	if *workDir == "" {
+	if workDir == "" {
 		var err error
-		*workDir, err = os.Getwd()
+		workDir, err = os.Getwd()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
 			os.Exit(1)
@@ -67,22 +87,23 @@ func main() {
 	}
 
 	// Validate build mode
-	buildMode := yoloplanner.BuildMode(*build)
+	buildMode := yoloplanner.BuildMode(build)
 	if !buildMode.IsValid() {
-		fmt.Fprintf(os.Stderr, "Error: invalid build mode %q. Valid values: 'current', 'new', or empty\n", *build)
+		fmt.Fprintf(os.Stderr, "Error: invalid build mode %q. Valid values: 'current', 'new', or empty\n", build)
 		os.Exit(1)
 	}
 
 	// Create config
 	config := yoloplanner.Config{
-		Model:        *model,
-		WorkDir:      *workDir,
-		RecordingDir: *recordDir,
-		SystemPrompt: *systemPrompt,
-		Verbose:      *verbose,
-		Simple:       *simple,
-		Prompt:       prompt,
-		BuildMode:    buildMode,
+		Model:               model,
+		WorkDir:             workDir,
+		RecordingDir:        recordDir,
+		SystemPrompt:        systemPrompt,
+		Verbose:             verbose,
+		Simple:              simple,
+		Prompt:              prompt,
+		BuildMode:           buildMode,
+		ExternalBuilderPath: externalBuilder,
 	}
 
 	// Create planner wrapper

@@ -98,21 +98,54 @@ func TestCommandError(t *testing.T) {
 }
 
 func TestCommandOutputTruncation(t *testing.T) {
-	var buf bytes.Buffer
-	r := NewRenderer(&buf, false, true) // verbose=false to test truncation
+	// When verbose=false, no output should be shown (only inline status)
+	t.Run("non-verbose mode hides output", func(t *testing.T) {
+		var buf bytes.Buffer
+		r := NewRenderer(&buf, false, true) // verbose=false
 
-	r.CommandStart("call1", "cat bigfile")
-	// Need more than 10 lines to trigger truncation (maxLines=10)
-	for i := 0; i < 15; i++ {
-		r.CommandOutput("call1", "line "+string(rune('A'+i))+"\n")
-	}
-	r.CommandEnd("call1", 0, 100)
+		r.CommandStart("call1", "cat bigfile")
+		for i := 0; i < 15; i++ {
+			r.CommandOutput("call1", "line "+string(rune('A'+i))+"\n")
+		}
+		r.CommandEnd("call1", 0, 100)
 
-	output := buf.String()
-	// Should show truncation message (5 more lines after first 10)
-	if !strings.Contains(output, "more lines") {
-		t.Errorf("Missing truncation message in non-verbose mode: %q", output)
-	}
+		output := buf.String()
+		// Should show command and inline status, but no output content
+		if !strings.Contains(output, "cat bigfile") {
+			t.Errorf("Missing command name: %q", output)
+		}
+		if !strings.Contains(output, "✓") {
+			t.Errorf("Missing success indicator: %q", output)
+		}
+		// Should NOT contain any line output
+		if strings.Contains(output, "line A") {
+			t.Errorf("Non-verbose mode should not show output: %q", output)
+		}
+	})
+
+	// When verbose=true, full output should be shown
+	t.Run("verbose mode shows output", func(t *testing.T) {
+		var buf bytes.Buffer
+		r := NewRenderer(&buf, true, true) // verbose=true
+
+		r.CommandStart("call1", "cat bigfile")
+		for i := 0; i < 15; i++ {
+			r.CommandOutput("call1", "line "+string(rune('A'+i))+"\n")
+		}
+		r.CommandEnd("call1", 0, 100)
+
+		output := buf.String()
+		// Should show command, output, and status
+		if !strings.Contains(output, "cat bigfile") {
+			t.Errorf("Missing command name: %q", output)
+		}
+		if !strings.Contains(output, "line A") {
+			t.Errorf("Missing output content: %q", output)
+		}
+		if !strings.Contains(output, "✓") {
+			t.Errorf("Missing success indicator: %q", output)
+		}
+	})
 }
 
 func TestTurnComplete(t *testing.T) {

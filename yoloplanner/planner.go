@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -176,6 +178,11 @@ type Config struct {
 	// BuildMode controls what happens after planning completes in simple mode.
 	// "current" = execute in current session, "new" = execute in new session.
 	BuildMode BuildMode
+
+	// ExternalBuilderPath is the path to an external builder executable.
+	// When set with BuildMode "new", the external builder is launched instead
+	// of starting a fresh claude session.
+	ExternalBuilderPath string
 }
 
 // SessionStats tracks cumulative token usage and cost for a session phase.
@@ -607,6 +614,11 @@ func (p *PlannerWrapper) executeInCurrentSession(ctx context.Context) (bool, err
 // executeInNewSession stops current session and starts fresh to implement the plan.
 // Requires a plan file to exist; falls back to current session if no plan file.
 func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) {
+	// If external builder is configured, use it instead
+	if p.config.ExternalBuilderPath != "" {
+		return p.executeWithExternalBuilder(ctx)
+	}
+
 	// Check if plan file exists - new session needs a file to reference
 	if p.planFilePath == "" {
 		fmt.Println("\n⚠ No plan file detected. Falling back to current session execution...")
@@ -665,6 +677,123 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 	msg := fmt.Sprintf("Implement the plan in %s", p.planFilePath)
 	_, err := p.session.SendMessage(ctx, msg)
 	return false, err
+}
+
+// executeWithExternalBuilder launches an external builder tool with the plan file.
+// Returns (done=true, error) to signal session should exit.
+func (p *PlannerWrapper) executeWithExternalBuilder(ctx context.Context) (bool, error) {
+	// 1. Validate external builder path
+	builderPath, err := validateExecutablePath(p.config.ExternalBuilderPath)
+	if err != nil {
+		return false, fmt.Errorf("invalid external builder: %w", err)
+	}
+
+	// 2. Check plan file exists
+	if p.planFilePath == "" {
+		return false, fmt.Errorf("no plan file available for external builder")
+	}
+	if _, err := os.Stat(p.planFilePath); os.IsNotExist(err) {
+		return false, fmt.Errorf("plan file not found: %s", p.planFilePath)
+	}
+
+	// 3. Build command arguments
+	args := p.buildExternalBuilderArgs()
+
+	// 4. Create command with context (for cancellation)
+	cmd := exec.CommandContext(ctx, builderPath, args...)
+	cmd.Dir = p.config.WorkDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// 5. Log what we're doing
+	fmt.Printf("\n→ Launching external builder: %s\n", builderPath)
+	if p.config.Verbose {
+		fmt.Printf("  Command: %s %s\n", builderPath, strings.Join(args, " "))
+	}
+
+	// 6. Run and wait for completion
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			// Context was cancelled (e.g., Ctrl+C) - exit gracefully
+			return true, nil
+		}
+		return false, fmt.Errorf("external builder failed: %w", err)
+	}
+
+	// 7. Success - signal to exit session
+	return true, nil
+}
+
+// validateExecutablePath checks if the path points to an executable file.
+// Returns absolute path if valid, error otherwise.
+func validateExecutablePath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("empty path")
+	}
+
+	// Resolve to absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	// Check file exists
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("file not found: %s", absPath)
+		}
+		return "", err
+	}
+
+	// Check is regular file
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("not a regular file: %s", absPath)
+	}
+
+	// Check is executable (Unix-like systems)
+	if info.Mode()&0111 == 0 {
+		return "", fmt.Errorf("file is not executable: %s (try: chmod +x)", absPath)
+	}
+
+	return absPath, nil
+}
+
+// buildExternalBuilderArgs constructs command arguments for the external builder.
+// Maps yoloplanner config to external builder CLI flags (yoloswe format).
+func (p *PlannerWrapper) buildExternalBuilderArgs() []string {
+	args := []string{}
+
+	// Map model to builder-model
+	if p.config.Model != "" {
+		args = append(args, "--builder-model", p.config.Model)
+	}
+
+	// Map working directory
+	if p.config.WorkDir != "" {
+		args = append(args, "--dir", p.config.WorkDir)
+	}
+
+	// Map recording directory
+	if p.config.RecordingDir != "" {
+		args = append(args, "--record", p.config.RecordingDir)
+	}
+
+	// Map system prompt
+	if p.config.SystemPrompt != "" {
+		args = append(args, "--system", p.config.SystemPrompt)
+	}
+
+	// Map verbose flag
+	if p.config.Verbose {
+		args = append(args, "--verbose")
+	}
+
+	// Add prompt: "Implement the plan in <plan-file>"
+	prompt := fmt.Sprintf("Implement the plan in %s", p.planFilePath)
+	args = append(args, prompt)
+
+	return args
 }
 
 // parseOptionIndex parses a 1-based numeric option selection.

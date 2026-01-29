@@ -2,6 +2,8 @@ package yoloswe
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,6 +11,10 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	// Get expected default recording dir
+	homeDir, _ := os.UserHomeDir()
+	defaultRecordingDir := filepath.Join(homeDir, ".yoloswe")
+
 	tests := []struct {
 		name               string
 		config             Config
@@ -24,9 +30,9 @@ func TestNew(t *testing.T) {
 			config:             Config{},
 			expectedBModel:     "sonnet",
 			expectedRModel:     "gpt-5.2-codex",
-			expectedRecDir:     ".swe-sessions",
-			expectedBudget:     5.0,
-			expectedTimeout:    600,
+			expectedRecDir:     defaultRecordingDir,
+			expectedBudget:     100.0,
+			expectedTimeout:    3600,
 			expectedIterations: 10,
 		},
 		{
@@ -55,9 +61,9 @@ func TestNew(t *testing.T) {
 			},
 			expectedBModel:     "sonnet",
 			expectedRModel:     "gpt-5.2-codex",
-			expectedRecDir:     ".swe-sessions",
-			expectedBudget:     5.0,
-			expectedTimeout:    600,
+			expectedRecDir:     defaultRecordingDir,
+			expectedBudget:     100.0,
+			expectedTimeout:    3600,
 			expectedIterations: 10,
 		},
 		{
@@ -69,9 +75,9 @@ func TestNew(t *testing.T) {
 			},
 			expectedBModel:     "sonnet",
 			expectedRModel:     "gpt-5.2-codex",
-			expectedRecDir:     ".swe-sessions",
-			expectedBudget:     5.0,
-			expectedTimeout:    600,
+			expectedRecDir:     defaultRecordingDir,
+			expectedBudget:     100.0,
+			expectedTimeout:    3600,
 			expectedIterations: 10,
 		},
 	}
@@ -576,20 +582,20 @@ func TestRunEdgeCases(t *testing.T) {
 	t.Run("immediate timeout", func(t *testing.T) {
 		// Test that a zero timeout is handled correctly
 		swe := New(Config{
-			MaxTimeSeconds: 0, // Will be defaulted to 600
+			MaxTimeSeconds: 0, // Will be defaulted to 3600
 		})
-		if swe.config.MaxTimeSeconds != 600 {
-			t.Errorf("expected default timeout 600, got %d", swe.config.MaxTimeSeconds)
+		if swe.config.MaxTimeSeconds != 3600 {
+			t.Errorf("expected default timeout 3600, got %d", swe.config.MaxTimeSeconds)
 		}
 	})
 
 	t.Run("immediate budget exceeded", func(t *testing.T) {
 		// Test that a zero budget is handled correctly
 		swe := New(Config{
-			MaxBudgetUSD: 0, // Will be defaulted to 5.0
+			MaxBudgetUSD: 0, // Will be defaulted to 100.0
 		})
-		if swe.config.MaxBudgetUSD != 5.0 {
-			t.Errorf("expected default budget 5.0, got %.2f", swe.config.MaxBudgetUSD)
+		if swe.config.MaxBudgetUSD != 100.0 {
+			t.Errorf("expected default budget 100.0, got %.2f", swe.config.MaxBudgetUSD)
 		}
 	})
 }
