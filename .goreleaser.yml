@@ -1,0 +1,82 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy -C yoloplanner
+    - go mod tidy -C yoloswe
+    - go mod tidy -C tools/sessionplayer
+
+builds:
+  - id: yoloplanner
+    dir: yoloplanner
+    main: ./cmd
+    binary: yoloplanner
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: yoloswe
+    dir: yoloswe
+    main: ./cmd
+    binary: yoloswe
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: sessionplayer
+    dir: tools/sessionplayer
+    main: ./cmd
+    binary: sessionplayer
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    name_template: "claude-cli-tools-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+
+brews:
+  - name: claude-cli-tools
+    repository:
+      owner: mzhaom
+      name: claude-cli-protocol
+    directory: Formula
+    homepage: "https://github.com/mzhaom/claude-cli-protocol"
+    description: "CLI tools for Claude Code protocol"
+    license: "Apache-2.0"
+    install: |
+      bin.install "yoloplanner"
+      bin.install "yoloswe"
+      bin.install "sessionplayer"
+
+release:
+  github:
+    owner: mzhaom
+    name: claude-cli-protocol
