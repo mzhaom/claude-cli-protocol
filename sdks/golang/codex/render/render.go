@@ -9,11 +9,12 @@ import (
 	"sync"
 )
 
-// ANSI color codes
+// ANSI color codes - chosen to work on both light and dark backgrounds
 const (
 	ColorReset   = "\x1b[0m"
 	ColorDim     = "\x1b[2m"
 	ColorItalic  = "\x1b[3m"
+	ColorBold    = "\x1b[1m"
 	ColorRed     = "\x1b[31m"
 	ColorGreen   = "\x1b[32m"
 	ColorYellow  = "\x1b[33m"
@@ -83,7 +84,8 @@ func (r *Renderer) Status(msg string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	fmt.Fprintf(r.out, "%s[Status]%s %s\n", r.color(ColorGray), r.color(ColorReset), msg)
+	// Use dim for status - visible on both light and dark backgrounds
+	fmt.Fprintf(r.out, "%s[Status] %s%s\n", r.color(ColorDim), msg, r.color(ColorReset))
 }
 
 // Text prints streaming text output.
@@ -99,13 +101,13 @@ func (r *Renderer) Text(text string) {
 	fmt.Fprint(r.out, text)
 }
 
-// Reasoning prints reasoning/thinking output in dim style.
+// Reasoning prints reasoning/thinking output in italic style.
 func (r *Renderer) Reasoning(text string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Use magenta for reasoning - more visible than dim gray
-	fmt.Fprintf(r.out, "%s%s%s", r.color(ColorMagenta), text, r.color(ColorReset))
+	// Use italic + cyan for reasoning - readable on both light and dark backgrounds
+	fmt.Fprintf(r.out, "%s%s%s%s", r.color(ColorItalic), r.color(ColorCyan), text, r.color(ColorReset))
 	r.inReasoning = true
 }
 
@@ -175,12 +177,12 @@ func (r *Renderer) CommandEnd(callID string, exitCode int, durationMs int64) {
 		lines := strings.Split(output, "\n")
 		maxLines := 10 // Show more lines by default
 		if r.verbose || len(lines) <= maxLines {
-			// Use dim white for command output - easier to read than yellow
-			fmt.Fprintf(r.out, "%s%s%s", r.color(ColorDim), output, r.color(ColorReset))
+			// No color for command output - works on all backgrounds
+			fmt.Fprint(r.out, output)
 		} else {
 			// Show first lines + truncation message
 			preview := strings.Join(lines[:maxLines], "\n")
-			fmt.Fprintf(r.out, "%s%s\n  ... (%d more lines)%s", r.color(ColorDim), preview, len(lines)-maxLines, r.color(ColorReset))
+			fmt.Fprintf(r.out, "%s\n  %s... (%d more lines)%s", preview, r.color(ColorYellow), len(lines)-maxLines, r.color(ColorReset))
 		}
 		// Indicate if output was truncated due to size limit
 		if cmd.truncated {
@@ -201,7 +203,7 @@ func (r *Renderer) TurnComplete(success bool, durationMs int64, inputTokens, out
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	fmt.Fprintf(r.out, "\n%s───────────────────────────────────────────────────────%s\n", r.color(ColorGray), r.color(ColorReset))
+	fmt.Fprintf(r.out, "\n%s───────────────────────────────────────────────────────%s\n", r.color(ColorDim), r.color(ColorReset))
 
 	status := "✓"
 	colorCode := ColorGreen

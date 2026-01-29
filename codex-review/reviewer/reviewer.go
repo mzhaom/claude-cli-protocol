@@ -185,7 +185,7 @@ func (r *Reviewer) waitForThreadReady(ctx context.Context, threadID string) erro
 		return nil
 	}
 
-	// Wait for ready event
+	// Wait for ready event or error
 	for {
 		select {
 		case <-ctx.Done():
@@ -194,8 +194,16 @@ func (r *Reviewer) waitForThreadReady(ctx context.Context, threadID string) erro
 			if !ok {
 				return fmt.Errorf("event channel closed")
 			}
-			if e, ok := event.(codex.ThreadReadyEvent); ok && e.ThreadID == threadID {
-				return nil
+			switch e := event.(type) {
+			case codex.ThreadReadyEvent:
+				if e.ThreadID == threadID {
+					return nil
+				}
+			case codex.ErrorEvent:
+				// Handle thread-specific errors (e.g., invalid model, auth failure)
+				if e.ThreadID == threadID || e.ThreadID == "" {
+					return fmt.Errorf("thread startup failed: %v", e.Error)
+				}
 			}
 		}
 	}
