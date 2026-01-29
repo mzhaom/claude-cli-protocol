@@ -163,3 +163,9 @@ type SetPermissionModeRequestToSend struct {
 type InterruptRequestToSend struct {
 	Subtype string `json:"subtype"`
 }
+
+// SetModelRequestToSend is the request body for setting the model.
+type SetModelRequestToSend struct {
+	Subtype string `json:"subtype"`
+	Model   string `json:"model"`
+}

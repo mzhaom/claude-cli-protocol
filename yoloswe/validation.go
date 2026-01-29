@@ -169,9 +169,9 @@ func ValidatePrompt(prompt string) error {
 // Default values applied:
 //   - BuilderModel: "sonnet" (good balance of capability and cost)
 //   - ReviewerModel: "gpt-5.2-codex" (specialized code reviewer)
-//   - RecordingDir: ".swe-sessions" (local directory for session logs)
-//   - MaxBudgetUSD: $5.00 (prevents runaway costs)
-//   - MaxTimeSeconds: 600 (10 minutes wall-clock time)
+//   - RecordingDir: "~/.yoloswe" (home directory for session logs)
+//   - MaxBudgetUSD: $100.00 (prevents runaway costs)
+//   - MaxTimeSeconds: 3600 (1 hour wall-clock time)
 //   - MaxIterations: 10 (safety limit on builder-reviewer cycles)
 //
 // Sanitization performed:
@@ -188,19 +188,23 @@ func SanitizeConfig(config *Config) {
 		config.ReviewerModel = "gpt-5.2-codex"
 	}
 
-	// Apply recording directory default
+	// Apply recording directory default (expand ~ to home directory)
 	if config.RecordingDir == "" {
-		config.RecordingDir = ".swe-sessions"
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			config.RecordingDir = filepath.Join(homeDir, ".yoloswe")
+		} else {
+			config.RecordingDir = ".yoloswe"
+		}
 	}
 
 	// Apply budget default
 	if config.MaxBudgetUSD <= 0 {
-		config.MaxBudgetUSD = 5.0
+		config.MaxBudgetUSD = 100.0
 	}
 
 	// Apply timeout default
 	if config.MaxTimeSeconds <= 0 {
-		config.MaxTimeSeconds = 600 // 10 minutes
+		config.MaxTimeSeconds = 3600 // 1 hour
 	}
 
 	// Apply max iterations default

@@ -124,7 +124,7 @@ func TestConfigSanitizationEdgeCases(t *testing.T) {
 		if config.BuilderModel != "opus" {
 			t.Error("should preserve valid builder model")
 		}
-		if config.MaxBudgetUSD != 5.0 {
+		if config.MaxBudgetUSD != 100.0 {
 			t.Error("should apply default budget")
 		}
 		if config.MaxTimeSeconds != 1800 {

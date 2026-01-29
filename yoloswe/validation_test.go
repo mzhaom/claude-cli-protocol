@@ -2,6 +2,7 @@ package yoloswe
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -189,6 +190,10 @@ func TestValidatePrompt(t *testing.T) {
 }
 
 func TestSanitizeConfig(t *testing.T) {
+	// Get expected default recording dir
+	homeDir, _ := os.UserHomeDir()
+	defaultRecordingDir := filepath.Join(homeDir, ".yoloswe")
+
 	tests := []struct {
 		name     string
 		input    Config
@@ -200,9 +205,9 @@ func TestSanitizeConfig(t *testing.T) {
 			expected: Config{
 				BuilderModel:   "sonnet",
 				ReviewerModel:  "gpt-5.2-codex",
-				RecordingDir:   ".swe-sessions",
-				MaxBudgetUSD:   5.0,
-				MaxTimeSeconds: 600,
+				RecordingDir:   defaultRecordingDir,
+				MaxBudgetUSD:   100.0,
+				MaxTimeSeconds: 3600,
 				MaxIterations:  10,
 			},
 		},
@@ -236,9 +241,9 @@ func TestSanitizeConfig(t *testing.T) {
 			expected: Config{
 				BuilderModel:   "haiku",
 				ReviewerModel:  "gpt-5.2-codex",
-				RecordingDir:   ".swe-sessions",
-				MaxBudgetUSD:   5.0,
-				MaxTimeSeconds: 600,
+				RecordingDir:   defaultRecordingDir,
+				MaxBudgetUSD:   100.0,
+				MaxTimeSeconds: 3600,
 				MaxIterations:  10,
 			},
 		},
@@ -252,9 +257,9 @@ func TestSanitizeConfig(t *testing.T) {
 			expected: Config{
 				BuilderModel:   "sonnet",
 				ReviewerModel:  "gpt-5.2-codex",
-				RecordingDir:   ".swe-sessions",
-				MaxBudgetUSD:   5.0,
-				MaxTimeSeconds: 600,
+				RecordingDir:   defaultRecordingDir,
+				MaxBudgetUSD:   100.0,
+				MaxTimeSeconds: 3600,
 				MaxIterations:  10,
 			},
 		},
@@ -273,8 +278,8 @@ func TestSanitizeConfig(t *testing.T) {
 				RecordingDir:   "/tmp/recordings",
 				SystemPrompt:   "custom prompt",
 				Goal:           "task goal",
-				MaxBudgetUSD:   5.0,
-				MaxTimeSeconds: 600,
+				MaxBudgetUSD:   100.0,
+				MaxTimeSeconds: 3600,
 				MaxIterations:  10,
 			},
 		},

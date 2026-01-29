@@ -132,7 +132,13 @@ func (r *Renderer) HasOutput(callID string) bool {
 }
 
 // CommandOutput accumulates command output with memory limit.
+// When verbose=false, output is not accumulated (won't be displayed anyway).
 func (r *Renderer) CommandOutput(callID, chunk string) {
+	// Don't buffer output if we won't display it
+	if !r.verbose {
+		return
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -161,6 +167,8 @@ func (r *Renderer) CommandOutput(callID, chunk string) {
 }
 
 // CommandEnd prints the completion of a command execution.
+// When verbose=false, only shows inline status (✓/✗) without output.
+// When verbose=true, shows full output followed by status.
 func (r *Renderer) CommandEnd(callID string, exitCode int, durationMs int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -171,30 +179,33 @@ func (r *Renderer) CommandEnd(callID string, exitCode int, durationMs int64) {
 	}
 	delete(r.commands, callID)
 
-	// Print output (truncated unless verbose)
-	output := strings.TrimSpace(cmd.output.String())
-	if output != "" {
-		lines := strings.Split(output, "\n")
-		maxLines := 10 // Show more lines by default
-		if r.verbose || len(lines) <= maxLines {
+	// Only print output when verbose
+	if r.verbose {
+		output := strings.TrimSpace(cmd.output.String())
+		if output != "" {
+			lines := strings.Split(output, "\n")
 			// No color for command output - works on all backgrounds
 			fmt.Fprint(r.out, output)
-		} else {
-			// Show first lines + truncation message
-			preview := strings.Join(lines[:maxLines], "\n")
-			fmt.Fprintf(r.out, "%s\n  %s... (%d more lines)%s", preview, r.color(ColorYellow), len(lines)-maxLines, r.color(ColorReset))
+			// Indicate if output was truncated due to size limit
+			if cmd.truncated {
+				fmt.Fprintf(r.out, "%s\n  [output truncated at 1MB]%s", r.color(ColorYellow), r.color(ColorReset))
+			}
+			_ = lines // unused but keeping for potential future use
 		}
-		// Indicate if output was truncated due to size limit
-		if cmd.truncated {
-			fmt.Fprintf(r.out, "%s\n  [output truncated at 1MB]%s", r.color(ColorYellow), r.color(ColorReset))
-		}
-	}
 
-	// Print status indicator
-	if exitCode == 0 {
-		fmt.Fprintf(r.out, "\n  %s✓ %.2fs%s\n", r.color(ColorGreen), float64(durationMs)/1000, r.color(ColorReset))
+		// Print status indicator with newline (block format)
+		if exitCode == 0 {
+			fmt.Fprintf(r.out, "\n  %s✓ %.2fs%s\n", r.color(ColorGreen), float64(durationMs)/1000, r.color(ColorReset))
+		} else {
+			fmt.Fprintf(r.out, "\n  %s✗ exit %d (%.2fs)%s\n", r.color(ColorRed), exitCode, float64(durationMs)/1000, r.color(ColorReset))
+		}
 	} else {
-		fmt.Fprintf(r.out, "\n  %s✗ exit %d (%.2fs)%s\n", r.color(ColorRed), exitCode, float64(durationMs)/1000, r.color(ColorReset))
+		// Print inline status indicator (no output shown)
+		if exitCode == 0 {
+			fmt.Fprintf(r.out, "%s✓ %.2fs%s\n", r.color(ColorGreen), float64(durationMs)/1000, r.color(ColorReset))
+		} else {
+			fmt.Fprintf(r.out, "%s✗ exit %d (%.2fs)%s\n", r.color(ColorRed), exitCode, float64(durationMs)/1000, r.color(ColorReset))
+		}
 	}
 }
 
