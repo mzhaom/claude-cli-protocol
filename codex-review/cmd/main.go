@@ -19,6 +19,7 @@ func main() {
 	goal := flag.String("goal", "", "Goal/purpose of the changes on this branch")
 	sessionLog := flag.String("session-log", "", "Path to write session log (JSON messages)")
 	verbose := flag.Bool("verbose", false, "Show progress information (tool use, tokens, etc.)")
+	noColor := flag.Bool("no-color", false, "Disable ANSI color codes")
 	approvalPolicy := flag.String("approval", "on-failure", "Tool approval policy: untrusted, on-failure, on-request, never")
 
 	flag.Usage = func() {
@@ -34,7 +35,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintln(os.Stderr, "  codex-review -goal \"add user authentication\"")
 		fmt.Fprintln(os.Stderr, "  codex-review -approval never -goal \"trusted repo review\"")
-		fmt.Fprintln(os.Stderr, "  codex-review -verbose -goal \"review my changes\"")
+		fmt.Fprintln(os.Stderr, "  codex-review -verbose -no-color -goal \"review my changes\"")
 	}
 	flag.Parse()
 
@@ -57,6 +58,7 @@ func main() {
 		Goal:           *goal,
 		SessionLogPath: *sessionLog,
 		Verbose:        *verbose,
+		NoColor:        *noColor,
 		ApprovalPolicy: codex.ApprovalPolicy(*approvalPolicy),
 	})
 

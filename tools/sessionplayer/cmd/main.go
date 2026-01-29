@@ -1,64 +1,79 @@
-// sessionplayer plays back recorded Claude session messages with colored output.
+// sessionplayer plays back recorded Claude and Codex session messages with colored output.
 //
 // Usage:
 //
-//	sessionplayer [flags] <recording_dir>
+//	sessionplayer [flags] <path>
+//
+// The path can be:
+//   - A directory containing messages.jsonl (Claude format)
+//   - A JSONL file (Codex format)
 //
 // Examples:
 //
 //	sessionplayer .planner-sessions/session-abc123-1234567890/
-//	sessionplayer -verbose experiments/plan_mode_analysis/recordings/experiment_a/session-*/
+//	sessionplayer session.jsonl
+//	sessionplayer -verbose -no-color session.jsonl
 package main
 
 import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/mzhaom/claude-cli-protocol/tools/sessionplayer"
 )
 
 func main() {
-	verbose := flag.Bool("verbose", false, "Show all tool results (errors are always shown)")
+	verbose := flag.Bool("verbose", false, "Show all output (tool results, item events)")
+	noColor := flag.Bool("no-color", false, "Disable ANSI color codes")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <recording_dir>\n\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "Play back recorded Claude session messages with colored output.")
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <path>\n\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Play back recorded Claude or Codex session messages with colored output.")
+		fmt.Fprintln(os.Stderr, "\nThe path can be:")
+		fmt.Fprintln(os.Stderr, "  - A directory containing messages.jsonl (Claude format)")
+		fmt.Fprintln(os.Stderr, "  - A JSONL file (Codex format)")
 		fmt.Fprintln(os.Stderr, "\nFlags:")
 		flag.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintln(os.Stderr, "  sessionplayer .planner-sessions/session-abc123-1234567890/")
-		fmt.Fprintln(os.Stderr, "  sessionplayer -verbose experiments/recordings/session-*/")
+		fmt.Fprintln(os.Stderr, "  sessionplayer session.jsonl")
+		fmt.Fprintln(os.Stderr, "  sessionplayer -verbose -no-color session.jsonl")
 	}
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "Error: no recording directory provided")
+		fmt.Fprintln(os.Stderr, "Error: no session path provided")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	// Handle glob patterns - the shell expands them, so we might get multiple args
-	dirs := flag.Args()
+	// Handle multiple paths (shell glob expansion)
+	paths := flag.Args()
 
-	player := sessionplayer.NewPlayer(os.Stdout, *verbose)
+	var player *sessionplayer.Player
+	if *noColor {
+		player = sessionplayer.NewPlayerWithOptions(os.Stdout, *verbose, true)
+	} else {
+		player = sessionplayer.NewPlayer(os.Stdout, *verbose)
+	}
 
-	for i, dir := range dirs {
-		// Check if messages.jsonl exists (required file)
-		if _, err := os.Stat(filepath.Join(dir, "messages.jsonl")); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Warning: %s does not contain messages.jsonl, skipping\n", dir)
+	for i, path := range paths {
+		// Detect format to validate the path
+		format, err := sessionplayer.DetectFormat(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %s - %v, skipping\n", path, err)
 			continue
 		}
 
-		if len(dirs) > 1 {
+		if len(paths) > 1 {
 			if i > 0 {
-				fmt.Println() // Separator between recordings
+				fmt.Println() // Separator between sessions
 			}
-			fmt.Fprintf(os.Stdout, "=== Playing: %s ===\n\n", dir)
+			fmt.Fprintf(os.Stdout, "=== Playing (%s): %s ===\n\n", format, path)
 		}
 
-		if err := player.Play(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "Error playing %s: %v\n", dir, err)
+		if err := player.Play(path); err != nil {
+			fmt.Fprintf(os.Stderr, "Error playing %s: %v\n", path, err)
 			os.Exit(1)
 		}
 	}

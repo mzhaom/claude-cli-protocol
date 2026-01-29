@@ -194,6 +194,11 @@ const (
 	NotifyCodexEventError           = "codex/event/error"
 	NotifyCodexEventTokenCount      = "codex/event/token_count"
 	NotifyCodexEventMCPStartup      = "codex/event/mcp_startup_complete"
+	NotifyCodexEventExecBegin       = "codex/event/exec_command_begin"
+	NotifyCodexEventExecEnd         = "codex/event/exec_command_end"
+	NotifyCodexEventExecOutput      = "codex/event/exec_command_output_delta"
+	NotifyCodexEventReasoningDelta  = "codex/event/agent_reasoning_delta"
+	NotifyItemCommandOutputDelta    = "item/commandExecution/outputDelta"
 )
 
 // Notification params
@@ -304,4 +309,59 @@ type CreditsInfo struct {
 	HasCredits bool     `json:"has_credits"`
 	Unlimited  bool     `json:"unlimited"`
 	Balance    *float64 `json:"balance"`
+}
+
+// ExecCommandBeginMsg from codex/event/exec_command_begin.
+type ExecCommandBeginMsg struct {
+	Type      string     `json:"type"`
+	CallID    string     `json:"call_id"`
+	TurnID    string     `json:"turn_id"`
+	Command   []string   `json:"command"`
+	CWD       string     `json:"cwd"`
+	ParsedCmd []ParsedCmd `json:"parsed_cmd"`
+	Source    string     `json:"source"`
+}
+
+// ParsedCmd represents a parsed command.
+type ParsedCmd struct {
+	Type string `json:"type"`
+	Cmd  string `json:"cmd"`
+	Path string `json:"path,omitempty"`
+}
+
+// ExecCommandEndMsg from codex/event/exec_command_end.
+type ExecCommandEndMsg struct {
+	Type             string     `json:"type"`
+	CallID           string     `json:"call_id"`
+	TurnID           string     `json:"turn_id"`
+	Command          []string   `json:"command"`
+	CWD              string     `json:"cwd"`
+	ParsedCmd        []ParsedCmd `json:"parsed_cmd"`
+	Source           string     `json:"source"`
+	Stdout           string     `json:"stdout"`
+	Stderr           string     `json:"stderr"`
+	AggregatedOutput string     `json:"aggregated_output"`
+	ExitCode         int        `json:"exit_code"`
+	Duration         Duration   `json:"duration"`
+	FormattedOutput  string     `json:"formatted_output"`
+}
+
+// Duration represents a duration in the Codex format.
+type Duration struct {
+	Secs  int64 `json:"secs"`
+	Nanos int64 `json:"nanos"`
+}
+
+// ExecCommandOutputMsg from codex/event/exec_command_output_delta.
+type ExecCommandOutputMsg struct {
+	Type   string `json:"type"`
+	CallID string `json:"call_id"`
+	Stream string `json:"stream"` // "stdout" or "stderr"
+	Chunk  string `json:"chunk"`
+}
+
+// ReasoningDeltaMsg from codex/event/agent_reasoning_delta.
+type ReasoningDeltaMsg struct {
+	Type  string `json:"type"`
+	Delta string `json:"delta"`
 }

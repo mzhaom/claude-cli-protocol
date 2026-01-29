@@ -10,8 +10,6 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-
-	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
 
 // processManager manages the codex app-server subprocess.
@@ -97,6 +95,11 @@ func (pm *processManager) Start(ctx context.Context) error {
 			return &ProcessError{Message: "failed to create session log", Cause: err}
 		}
 		pm.sessionLog = f
+
+		// Write session log header
+		header := NewSessionLogHeader(pm.config.ClientName)
+		enc := json.NewEncoder(pm.sessionLog)
+		enc.Encode(header)
 	}
 
 	pm.started = true
@@ -250,12 +253,7 @@ func (pm *processManager) logMessageLocked(direction string, data []byte) {
 		return
 	}
 
-	record := claude.RecordedMessage{
-		Timestamp: time.Now(),
-		Direction: direction,
-		Message:   json.RawMessage(data),
-	}
-
+	entry := NewSessionLogEntry(direction, data)
 	enc := json.NewEncoder(pm.sessionLog)
-	enc.Encode(record)
+	enc.Encode(entry)
 }

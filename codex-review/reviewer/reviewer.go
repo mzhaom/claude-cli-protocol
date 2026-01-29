@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/codex"
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/codex/render"
 )
 
 // Config holds reviewer configuration.
@@ -15,8 +16,9 @@ type Config struct {
 	Model          string
 	WorkDir        string
 	Goal           string
-	SessionLogPath string              // Path to write session log (JSON messages)
-	Verbose        bool                // Show progress information (tool use, etc.)
+	SessionLogPath string               // Path to write session log (JSON messages)
+	Verbose        bool                 // Show progress information (tool use, etc.)
+	NoColor        bool                 // Disable ANSI color codes
 	ApprovalPolicy codex.ApprovalPolicy // Tool approval policy (default: on-failure)
 }
 
@@ -45,10 +47,10 @@ Ensure that file citations and line numbers are exactly correct using the tools 
 
 // Reviewer wraps the Codex SDK for code review operations.
 type Reviewer struct {
-	client  *codex.Client
-	config  Config
-	output  io.Writer
-	verbose io.Writer // Writer for verbose output (stderr)
+	client   *codex.Client
+	config   Config
+	output   io.Writer
+	renderer *render.Renderer
 }
 
 // New creates a new Reviewer with the given config.
@@ -59,19 +61,18 @@ func New(config Config) *Reviewer {
 	if config.ApprovalPolicy == "" {
 		config.ApprovalPolicy = codex.ApprovalPolicyOnFailure
 	}
-	r := &Reviewer{
-		config: config,
-		output: os.Stdout,
+	return &Reviewer{
+		config:   config,
+		output:   os.Stdout,
+		renderer: render.NewRenderer(os.Stdout, config.Verbose, config.NoColor),
 	}
-	if config.Verbose {
-		r.verbose = os.Stderr
-	}
-	return r
 }
 
 // SetOutput sets the output writer for streaming responses.
+// This also recreates the renderer to use the new writer.
 func (r *Reviewer) SetOutput(w io.Writer) {
 	r.output = w
+	r.renderer = render.NewRenderer(w, r.config.Verbose, r.config.NoColor)
 }
 
 // Start initializes the Codex client.
@@ -97,7 +98,7 @@ func (r *Reviewer) Stop() error {
 
 // Review sends a review prompt and streams the response to output.
 func (r *Reviewer) Review(ctx context.Context, prompt string) error {
-	r.logVerbose("Creating thread with model %s...\n", r.config.Model)
+	r.renderer.Status(fmt.Sprintf("Creating thread with model %s...", r.config.Model))
 
 	// Create thread
 	thread, err := r.client.CreateThread(ctx,
@@ -109,20 +110,23 @@ func (r *Reviewer) Review(ctx context.Context, prompt string) error {
 		return fmt.Errorf("failed to create thread: %w", err)
 	}
 
-	r.logVerbose("Waiting for thread to be ready...\n")
+	r.renderer.Status("Waiting for thread to be ready...")
 
 	// Wait for thread to be ready
 	if err := r.waitForThreadReady(ctx, thread.ID()); err != nil {
 		return fmt.Errorf("thread not ready: %w", err)
 	}
 
-	r.logVerbose("Thread ready, sending review prompt...\n")
+	r.renderer.Status("Thread ready, sending review prompt...")
 
 	// Send the review prompt
 	_, err = thread.SendMessage(ctx, prompt)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
+
+	// Track duration for turn summary
+	var turnDurationMs int64
 
 	// Stream the response
 	for {
@@ -137,34 +141,35 @@ func (r *Reviewer) Review(ctx context.Context, prompt string) error {
 			switch e := event.(type) {
 			case codex.TextDeltaEvent:
 				if e.ThreadID == thread.ID() {
-					fmt.Fprint(r.output, e.Delta)
+					r.renderer.Text(e.Delta)
 				}
-			case codex.ItemStartedEvent:
+			case codex.ReasoningDeltaEvent:
 				if e.ThreadID == thread.ID() {
-					r.logVerbose("[%s] started\n", e.ItemType)
+					r.renderer.Reasoning(e.Delta)
 				}
-			case codex.ItemCompletedEvent:
+			case codex.CommandStartEvent:
 				if e.ThreadID == thread.ID() {
-					r.logVerbose("[%s] completed\n", e.ItemType)
+					r.renderer.CommandStart(e.CallID, e.ParsedCmd)
+				}
+			case codex.CommandOutputEvent:
+				if e.ThreadID == thread.ID() {
+					r.renderer.CommandOutput(e.CallID, e.Chunk)
+				}
+			case codex.CommandEndEvent:
+				if e.ThreadID == thread.ID() {
+					r.renderer.CommandEnd(e.CallID, e.ExitCode, e.DurationMs)
 				}
 			case codex.TurnCompletedEvent:
 				if e.ThreadID == thread.ID() {
-					fmt.Fprintln(r.output)
-					r.logVerbose("Review completed (tokens: %d input, %d output)\n",
-						e.Usage.InputTokens, e.Usage.OutputTokens)
+					turnDurationMs = e.DurationMs
+					r.renderer.TurnComplete(e.Success, turnDurationMs, e.Usage.InputTokens, e.Usage.OutputTokens)
 					return nil
 				}
 			case codex.ErrorEvent:
+				r.renderer.Error(e.Error, e.Context)
 				return fmt.Errorf("error: %v", e.Error)
 			}
 		}
-	}
-}
-
-// logVerbose logs a message if verbose mode is enabled.
-func (r *Reviewer) logVerbose(format string, args ...interface{}) {
-	if r.verbose != nil {
-		fmt.Fprintf(r.verbose, format, args...)
 	}
 }
 

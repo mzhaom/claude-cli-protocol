@@ -1,4 +1,4 @@
-// Package sessionplayer provides playback of recorded Claude sessions.
+// Package sessionplayer provides playback of recorded Claude and Codex sessions.
 package sessionplayer
 
 import (
@@ -9,22 +9,43 @@ import (
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude/render"
+	codexrender "github.com/mzhaom/claude-cli-protocol/sdks/golang/codex/render"
 )
 
-// Player plays back recorded session messages.
+// Player plays back recorded session messages (Claude or Codex format).
 type Player struct {
-	renderer *render.Renderer
-	out      io.Writer
-	noColor  bool
+	claudeRenderer *render.Renderer
+	codexRenderer  *codexrender.Renderer
+	codexPlayer    *CodexPlayer
+	out            io.Writer
+	verbose        bool
+	noColor        bool
 }
 
 // NewPlayer creates a new session player.
 func NewPlayer(out io.Writer, verbose bool) *Player {
 	noColor := !isTerminal(out)
+	codexR := codexrender.NewRenderer(out, verbose, noColor)
 	return &Player{
-		renderer: render.NewRenderer(out, verbose),
-		out:      out,
-		noColor:  noColor,
+		claudeRenderer: render.NewRenderer(out, verbose),
+		codexRenderer:  codexR,
+		codexPlayer:    NewCodexPlayer(codexR, verbose),
+		out:            out,
+		verbose:        verbose,
+		noColor:        noColor,
+	}
+}
+
+// NewPlayerWithOptions creates a new session player with explicit options.
+func NewPlayerWithOptions(out io.Writer, verbose, noColor bool) *Player {
+	codexR := codexrender.NewRenderer(out, verbose, noColor)
+	return &Player{
+		claudeRenderer: render.NewRendererWithOptions(out, verbose, noColor),
+		codexRenderer:  codexR,
+		codexPlayer:    NewCodexPlayer(codexR, verbose),
+		out:            out,
+		verbose:        verbose,
+		noColor:        noColor,
 	}
 }
 
@@ -48,9 +69,26 @@ func (p *Player) color(c string) string {
 	return c
 }
 
-// Play plays back all messages from a recording directory.
-// Returns error only for fatal issues. Missing meta.json is not an error.
-func (p *Player) Play(dirPath string) error {
+// Play auto-detects format and plays back the session.
+// Accepts either a directory (Claude format) or a file (Codex format).
+func (p *Player) Play(path string) error {
+	format, err := DetectFormat(path)
+	if err != nil {
+		return fmt.Errorf("failed to detect format: %w", err)
+	}
+
+	switch format {
+	case FormatClaude:
+		return p.playClaude(path)
+	case FormatCodex:
+		return p.playCodex(path)
+	default:
+		return fmt.Errorf("unknown format: %s", format)
+	}
+}
+
+// playClaude plays back a Claude session recording directory.
+func (p *Player) playClaude(dirPath string) error {
 	// Load metadata (optional - continue without it if missing)
 	recording, metaErr := claude.LoadRecording(dirPath)
 	if metaErr == nil {
@@ -73,6 +111,11 @@ func (p *Player) Play(dirPath string) error {
 	}
 
 	return nil
+}
+
+// playCodex plays back a Codex session log file.
+func (p *Player) playCodex(filePath string) error {
+	return p.codexPlayer.PlayFile(filePath)
 }
 
 // printHeader prints session metadata header.
@@ -153,7 +196,7 @@ func (p *Player) renderSystemMessage(raw json.RawMessage) {
 
 	switch msg.Subtype {
 	case "init":
-		p.renderer.Status(fmt.Sprintf("Session initialized: %s (model: %s)", msg.SessionID, msg.Model))
+		p.claudeRenderer.Status(fmt.Sprintf("Session initialized: %s (model: %s)", msg.SessionID, msg.Model))
 	case "hook_started", "hook_response":
 		// Skip hook messages in playback
 	}
@@ -190,17 +233,17 @@ func (p *Player) renderStreamEvent(raw json.RawMessage) {
 	switch event.Type {
 	case "content_block_start":
 		if event.ContentBlock.Type == "tool_use" {
-			p.renderer.ToolStart(event.ContentBlock.Name, event.ContentBlock.ID)
+			p.claudeRenderer.ToolStart(event.ContentBlock.Name, event.ContentBlock.ID)
 		}
 	case "content_block_delta":
 		switch event.Delta.Type {
 		case "text_delta":
-			p.renderer.Text(event.Delta.Text)
+			p.claudeRenderer.Text(event.Delta.Text)
 		case "thinking_delta":
-			p.renderer.Thinking(event.Delta.Thinking)
+			p.claudeRenderer.Thinking(event.Delta.Thinking)
 		case "input_json_delta":
 			// Tool input streaming - skip for cleaner output
-			// p.renderer.ToolProgress(event.Delta.PartialJSON)
+			// p.claudeRenderer.ToolProgress(event.Delta.PartialJSON)
 		}
 	case "content_block_stop":
 		// Block completed
@@ -225,7 +268,7 @@ func (p *Player) renderUserMessage(raw json.RawMessage) {
 			if bMap, ok := block.(map[string]interface{}); ok {
 				if bMap["type"] == "tool_result" {
 					isError, _ := bMap["is_error"].(bool)
-					p.renderer.ToolResult(bMap["content"], isError)
+					p.claudeRenderer.ToolResult(bMap["content"], isError)
 				}
 			}
 		}
@@ -246,6 +289,6 @@ func (p *Player) renderResultMessage(raw json.RawMessage) {
 	}
 
 	if msg.Subtype == "success" || msg.Subtype == "error_max_turns" {
-		p.renderer.TurnSummary(msg.NumTurns, !msg.IsError, msg.DurationMs, msg.TotalCostUSD)
+		p.claudeRenderer.TurnSummary(msg.NumTurns, !msg.IsError, msg.DurationMs, msg.TotalCostUSD)
 	}
 }

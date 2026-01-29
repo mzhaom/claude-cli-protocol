@@ -464,6 +464,18 @@ func (c *Client) handleNotification(line []byte, method string) {
 
 	case NotifyItemCompleted:
 		c.handleItemCompleted(notif.Params)
+
+	case NotifyCodexEventExecBegin:
+		c.handleExecCommandBegin(notif.Params)
+
+	case NotifyCodexEventExecEnd:
+		c.handleExecCommandEnd(notif.Params)
+
+	case NotifyCodexEventExecOutput:
+		c.handleExecCommandOutput(notif.Params)
+
+	case NotifyCodexEventReasoningDelta:
+		c.handleReasoningDelta(notif.Params)
 	}
 }
 
@@ -749,6 +761,97 @@ func (c *Client) emitError(threadID, turnID string, err error, context string) {
 		Error:     err,
 		Context:   context,
 		Timestamp: time.Now(),
+	})
+}
+
+func (c *Client) handleExecCommandBegin(params json.RawMessage) {
+	var notif CodexEventNotification
+	if err := json.Unmarshal(params, &notif); err != nil {
+		return
+	}
+
+	var msg ExecCommandBeginMsg
+	if err := json.Unmarshal(notif.Msg, &msg); err != nil {
+		return
+	}
+
+	// Extract simplified command for display
+	parsedCmd := ""
+	if len(msg.ParsedCmd) > 0 {
+		parsedCmd = msg.ParsedCmd[0].Cmd
+	} else if len(msg.Command) >= 3 {
+		// Command is typically ["/bin/zsh", "-lc", "actual command"]
+		parsedCmd = msg.Command[2]
+	}
+
+	c.emit(CommandStartEvent{
+		ThreadID:  notif.ConversationID,
+		TurnID:    msg.TurnID,
+		CallID:    msg.CallID,
+		Command:   msg.Command,
+		CWD:       msg.CWD,
+		ParsedCmd: parsedCmd,
+	})
+}
+
+func (c *Client) handleExecCommandEnd(params json.RawMessage) {
+	var notif CodexEventNotification
+	if err := json.Unmarshal(params, &notif); err != nil {
+		return
+	}
+
+	var msg ExecCommandEndMsg
+	if err := json.Unmarshal(notif.Msg, &msg); err != nil {
+		return
+	}
+
+	// Convert duration to milliseconds
+	durationMs := msg.Duration.Secs*1000 + msg.Duration.Nanos/1000000
+
+	c.emit(CommandEndEvent{
+		ThreadID:   notif.ConversationID,
+		TurnID:     msg.TurnID,
+		CallID:     msg.CallID,
+		ExitCode:   msg.ExitCode,
+		Stdout:     msg.Stdout,
+		Stderr:     msg.Stderr,
+		DurationMs: durationMs,
+	})
+}
+
+func (c *Client) handleExecCommandOutput(params json.RawMessage) {
+	var notif CodexEventNotification
+	if err := json.Unmarshal(params, &notif); err != nil {
+		return
+	}
+
+	var msg ExecCommandOutputMsg
+	if err := json.Unmarshal(notif.Msg, &msg); err != nil {
+		return
+	}
+
+	c.emit(CommandOutputEvent{
+		ThreadID: notif.ConversationID,
+		CallID:   msg.CallID,
+		Stream:   msg.Stream,
+		Chunk:    msg.Chunk,
+	})
+}
+
+func (c *Client) handleReasoningDelta(params json.RawMessage) {
+	var notif CodexEventNotification
+	if err := json.Unmarshal(params, &notif); err != nil {
+		return
+	}
+
+	var msg ReasoningDeltaMsg
+	if err := json.Unmarshal(notif.Msg, &msg); err != nil {
+		return
+	}
+
+	c.emit(ReasoningDeltaEvent{
+		ThreadID: notif.ConversationID,
+		Delta:    msg.Delta,
 	})
 }
 
