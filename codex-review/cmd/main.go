@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	model := flag.String("model", "gpt-5.2-codex", "Model to use: gpt-5.2-codex, o4-mini, gpt-4o, sonnet, opus")
+	model := flag.String("model", "gpt-5.2-codex", "Model to use: gpt-5.2-codex, o4-mini, gpt-4o")
 	workDir := flag.String("dir", "", "Working directory (defaults to current directory)")
 	goal := flag.String("goal", "", "Goal/purpose of the changes on this branch")
 	sessionLog := flag.String("session-log", "", "Path to write session log (JSON messages)")
