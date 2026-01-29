@@ -6,28 +6,8 @@ import (
 	"time"
 )
 
-// TestRunNilChecks tests defensive nil checks in Run method
-func TestRunNilChecks(t *testing.T) {
-	t.Run("nil SWEWrapper", func(t *testing.T) {
-		var swe *SWEWrapper
-		ctx := context.Background()
-		err := swe.Run(ctx, "test prompt")
-		if err == nil {
-			t.Error("expected error for nil SWEWrapper")
-		}
-		if err != nil && err.Error() != "SWEWrapper is nil" {
-			t.Errorf("unexpected error message: %v", err)
-		}
-	})
-
-	t.Run("nil context", func(t *testing.T) {
-		swe := New(Config{})
-		err := swe.Run(nil, "test prompt")
-		if err == nil {
-			t.Error("expected error for nil context")
-		}
-	})
-
+// TestRunValidation tests prompt validation in Run method
+func TestRunValidation(t *testing.T) {
 	t.Run("empty prompt after validation", func(t *testing.T) {
 		swe := New(Config{})
 		ctx := context.Background()

@@ -409,28 +409,12 @@ func TestAutoAnswerQuestionEdgeCases(t *testing.T) {
 	}
 }
 
-func TestBuilderNilChecks(t *testing.T) {
-	t.Run("nil builder session", func(t *testing.T) {
-		var builder *BuilderSession
-
-		// Stop should not panic on nil builder
-		if builder.Stop() != nil {
-			// Expected behavior - may return error or nil
-		}
-
-		// RecordingPath should not panic on nil builder
-		if builder.RecordingPath() != "" {
-			t.Error("RecordingPath on nil builder should return empty string")
-		}
-	})
-
-	t.Run("nil output writer", func(t *testing.T) {
-		// Should handle nil output gracefully
-		builder := NewBuilderSession(BuilderConfig{}, nil)
-		if builder == nil {
-			t.Error("NewBuilderSession should not return nil even with nil output")
-		}
-	})
+func TestBuilderNilOutput(t *testing.T) {
+	// Should handle nil output gracefully
+	builder := NewBuilderSession(BuilderConfig{}, nil)
+	if builder == nil {
+		t.Error("NewBuilderSession should not return nil even with nil output")
+	}
 }
 
 func TestAutoAnswerQuestionPerformance(t *testing.T) {

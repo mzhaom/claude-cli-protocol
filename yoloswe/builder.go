@@ -75,34 +75,19 @@ func (b *BuilderSession) Start(ctx context.Context) error {
 	return b.session.Start(ctx)
 }
 
-// Stop gracefully shuts down the session.
+// Stop gracefully shuts down the session. Safe to call before Start.
 func (b *BuilderSession) Stop() error {
-	if b == nil {
+	if b.session == nil {
 		return nil
 	}
-	if b.session != nil {
-		return b.session.Stop()
-	}
-	return nil
+	return b.session.Stop()
 }
 
 // RunTurn sends a message and processes the turn until completion.
 // Returns the turn usage for budget tracking.
 func (b *BuilderSession) RunTurn(ctx context.Context, message string) (*claude.TurnUsage, error) {
-	// Validate inputs
-	if b == nil {
-		return nil, fmt.Errorf("builder session is nil")
-	}
-	if b.session == nil {
-		return nil, fmt.Errorf("session not started")
-	}
 	if strings.TrimSpace(message) == "" {
 		return nil, fmt.Errorf("message cannot be empty")
-	}
-
-	// Additional context validation
-	if ctx == nil {
-		return nil, fmt.Errorf("context cannot be nil")
 	}
 
 	_, err := b.session.SendMessage(ctx, message)
@@ -282,12 +267,10 @@ func joinStrings(strs []string, sep string) string {
 }
 
 // RecordingPath returns the path to the session recording directory.
+// Returns empty string if session not started.
 func (b *BuilderSession) RecordingPath() string {
-	if b == nil {
+	if b.session == nil {
 		return ""
 	}
-	if b.session != nil {
-		return b.session.RecordingPath()
-	}
-	return ""
+	return b.session.RecordingPath()
 }

@@ -191,23 +191,6 @@ func New(config Config) *SWEWrapper {
 
 // Run executes the builder-reviewer loop with the given initial prompt.
 func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
-	// Defensive nil checks
-	if s == nil {
-		return fmt.Errorf("SWEWrapper is nil")
-	}
-	if ctx == nil {
-		s.stats.ExitReason = ExitReasonError
-		return fmt.Errorf("context cannot be nil")
-	}
-	if s.builder == nil {
-		s.stats.ExitReason = ExitReasonError
-		return fmt.Errorf("builder not initialized")
-	}
-	if s.reviewer == nil {
-		s.stats.ExitReason = ExitReasonError
-		return fmt.Errorf("reviewer not initialized")
-	}
-
 	// Validate prompt
 	if err := ValidatePrompt(prompt); err != nil {
 		s.stats.ExitReason = ExitReasonError
@@ -283,12 +266,6 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 			return fmt.Errorf("builder error: %w", err)
 		}
 
-		// Validate builder usage response
-		if builderUsage == nil {
-			s.stats.ExitReason = ExitReasonError
-			return fmt.Errorf("builder returned nil usage")
-		}
-
 		// Update builder stats
 		s.stats.BuilderCostUSD += builderUsage.CostUSD
 		s.stats.BuilderTokensIn += builderUsage.InputTokens
@@ -326,12 +303,6 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 			s.stats.ExitReason = ExitReasonError
 			fmt.Fprintf(s.output, "\n=== Reviewer failed: %v ===\n", err)
 			return fmt.Errorf("reviewer error: %w", err)
-		}
-
-		// Validate reviewer result
-		if reviewResult == nil {
-			s.stats.ExitReason = ExitReasonError
-			return fmt.Errorf("reviewer returned nil result")
 		}
 
 		// Update reviewer stats
