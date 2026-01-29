@@ -50,7 +50,7 @@ The loop continues until the reviewer accepts or limits are reached.`,
 	rootCmd.Flags().StringVar(&dir, "dir", "", "Working directory (default: current)")
 	rootCmd.Flags().Float64Var(&budget, "budget", 100.0, "Max USD for builder session")
 	rootCmd.Flags().IntVar(&timeout, "timeout", 3600, "Max seconds")
-	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 10, "Max builder-reviewer iterations")
+	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 100, "Max builder-reviewer iterations")
 	rootCmd.Flags().StringVar(&record, "record", "", "Session recordings directory (default: ~/.yoloswe)")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed output")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt for builder")
