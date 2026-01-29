@@ -1,8 +1,11 @@
 package codex
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestClientState_String(t *testing.T) {
@@ -221,4 +224,144 @@ func TestThreadStateManager_Concurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestThreadStateManager_WaitForReady_AlreadyReady(t *testing.T) {
+	m := newThreadStateManager()
+	m.SetReady()
+
+	ctx := context.Background()
+	if err := m.WaitForReady(ctx); err != nil {
+		t.Errorf("WaitForReady failed when already ready: %v", err)
+	}
+}
+
+func TestThreadStateManager_WaitForReady_BecomesReady(t *testing.T) {
+	m := newThreadStateManager()
+
+	done := make(chan error, 1)
+	go func() {
+		ctx := context.Background()
+		done <- m.WaitForReady(ctx)
+	}()
+
+	// Give the goroutine time to start waiting
+	time.Sleep(10 * time.Millisecond)
+
+	// Transition to ready
+	m.SetReady()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("WaitForReady failed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("WaitForReady did not return after SetReady")
+	}
+}
+
+func TestThreadStateManager_WaitForReady_Closed(t *testing.T) {
+	m := newThreadStateManager()
+
+	done := make(chan error, 1)
+	go func() {
+		ctx := context.Background()
+		done <- m.WaitForReady(ctx)
+	}()
+
+	// Give the goroutine time to start waiting
+	time.Sleep(10 * time.Millisecond)
+
+	// Close the thread
+	m.SetClosed()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrClientClosed) {
+			t.Errorf("WaitForReady returned %v, want ErrClientClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("WaitForReady did not return after SetClosed")
+	}
+}
+
+func TestThreadStateManager_WaitForReady_ContextCancelled(t *testing.T) {
+	m := newThreadStateManager()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- m.WaitForReady(ctx)
+	}()
+
+	// Give the goroutine time to start waiting
+	time.Sleep(10 * time.Millisecond)
+
+	// Cancel context
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("WaitForReady returned %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("WaitForReady did not return after context cancellation")
+	}
+}
+
+func TestThreadStateManager_WaitForReady_ContextAlreadyCancelled(t *testing.T) {
+	m := newThreadStateManager()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel before calling WaitForReady
+
+	err := m.WaitForReady(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("WaitForReady returned %v, want context.Canceled", err)
+	}
+}
+
+func TestThreadStateManager_WaitForReady_Error(t *testing.T) {
+	m := newThreadStateManager()
+	testErr := errors.New("startup failed")
+
+	done := make(chan error, 1)
+	go func() {
+		ctx := context.Background()
+		done <- m.WaitForReady(ctx)
+	}()
+
+	// Give the goroutine time to start waiting
+	time.Sleep(10 * time.Millisecond)
+
+	// Set error
+	m.SetError(testErr)
+
+	select {
+	case err := <-done:
+		if err != testErr {
+			t.Errorf("WaitForReady returned %v, want %v", err, testErr)
+		}
+	case <-time.After(time.Second):
+		t.Error("WaitForReady did not return after SetError")
+	}
+}
+
+func TestThreadStateManager_Error(t *testing.T) {
+	m := newThreadStateManager()
+
+	// No error initially
+	if err := m.Error(); err != nil {
+		t.Errorf("Error() returned %v, want nil", err)
+	}
+
+	testErr := errors.New("test error")
+	m.SetError(testErr)
+
+	if err := m.Error(); err != testErr {
+		t.Errorf("Error() returned %v, want %v", err, testErr)
+	}
 }

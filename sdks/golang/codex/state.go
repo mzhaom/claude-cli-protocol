@@ -140,9 +140,10 @@ func (m *clientStateManager) IsReady() bool {
 
 // threadStateManager manages thread-safe thread state transitions.
 type threadStateManager struct {
-	mu    sync.RWMutex
-	cond  *sync.Cond
-	state ThreadState
+	mu       sync.RWMutex
+	cond     *sync.Cond
+	state    ThreadState
+	startErr error // Error from startup (e.g., MCP initialization failure)
 }
 
 func newThreadStateManager() *threadStateManager {
@@ -202,14 +203,36 @@ func (m *threadStateManager) SetClosed() {
 	m.cond.Broadcast()
 }
 
-// WaitForReady blocks until the state becomes Ready or Closed.
-// Returns nil if Ready, ErrClientClosed if Closed.
+// SetError sets a startup error and wakes any waiters.
+// This is used when thread initialization fails (e.g., MCP startup error).
+func (m *threadStateManager) SetError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.startErr = err
+	m.cond.Broadcast()
+}
+
+// Error returns the startup error, if any.
+func (m *threadStateManager) Error() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.startErr
+}
+
+// WaitForReady blocks until the state becomes Ready, Closed, or an error occurs.
+// Returns nil if Ready, the startup error if one occurred, or ErrClientClosed if Closed.
 func (m *threadStateManager) WaitForReady(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for m.state != ThreadStateReady && m.state != ThreadStateClosed {
-		// Use a goroutine to handle context cancellation
+	for m.state != ThreadStateReady && m.state != ThreadStateClosed && m.startErr == nil {
+		// Check context before waiting
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Use a goroutine to handle context cancellation.
+		// Start before Wait() to avoid missing the cancellation.
 		done := make(chan struct{})
 		go func() {
 			select {
@@ -222,11 +245,15 @@ func (m *threadStateManager) WaitForReady(ctx context.Context) error {
 		m.cond.Wait()
 		close(done)
 
+		// Check context after waking - could have been woken by cancellation
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 	}
 
+	if m.startErr != nil {
+		return m.startErr
+	}
 	if m.state == ThreadStateClosed {
 		return ErrClientClosed
 	}

@@ -287,6 +287,10 @@ func (t *Thread) setReady() {
 	_ = t.state.SetReady()
 }
 
+func (t *Thread) setError(err error) {
+	t.state.SetError(err)
+}
+
 // TurnResult contains the result of a completed turn.
 type TurnResult struct {
 	TurnID     string
