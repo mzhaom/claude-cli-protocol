@@ -61,6 +61,10 @@ type SessionConfig struct {
 	// as can_use_tool control requests instead of CLI's interactive UI.
 	// This enables fully programmatic permission control.
 	PermissionPromptToolStdio bool
+
+	// Resume is the session ID to resume. If set, the CLI will continue
+	// a previous session instead of starting a new one.
+	Resume string
 }
 
 // SessionOption is a functional option for configuring a Session.
@@ -161,6 +165,14 @@ func WithSystemPrompt(prompt string) SessionOption {
 func WithPermissionPromptToolStdio() SessionOption {
 	return func(c *SessionConfig) {
 		c.PermissionPromptToolStdio = true
+	}
+}
+
+// WithResume sets a session ID to resume instead of starting a new session.
+// When resuming, the CLI will load the previous conversation context.
+func WithResume(sessionID string) SessionOption {
+	return func(c *SessionConfig) {
+		c.Resume = sessionID
 	}
 }
 

@@ -77,6 +77,11 @@ func (pm *processManager) BuildCLIArgs() ([]string, error) {
 		args = append(args, "--system-prompt", pm.config.SystemPrompt)
 	}
 
+	// Add resume session ID if provided
+	if pm.config.Resume != "" {
+		args = append(args, "--resume", pm.config.Resume)
+	}
+
 	// Always include partial messages for tool progress tracking
 	args = append(args, "--include-partial-messages")
 

@@ -24,6 +24,7 @@ var (
 	verbose         bool
 	systemPrompt    string
 	requireApproval bool
+	resumeSession   string
 )
 
 func main() {
@@ -45,13 +46,14 @@ The loop continues until the reviewer accepts or limits are reached.`,
 	rootCmd.Flags().StringVar(&builderModel, "builder-model", "sonnet", "Builder model: haiku, sonnet, opus")
 	rootCmd.Flags().StringVar(&reviewerModel, "reviewer-model", "gpt-5.2-codex", "Reviewer model: gpt-5.2-codex, o4-mini")
 	rootCmd.Flags().StringVar(&dir, "dir", "", "Working directory (default: current)")
-	rootCmd.Flags().Float64Var(&budget, "budget", 5.0, "Max USD for builder session")
-	rootCmd.Flags().IntVar(&timeout, "timeout", 600, "Max seconds")
-	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 10, "Max builder-reviewer iterations")
+	rootCmd.Flags().Float64Var(&budget, "budget", 100.0, "Max USD for builder session")
+	rootCmd.Flags().IntVar(&timeout, "timeout", 3600, "Max seconds")
+	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 100, "Max builder-reviewer iterations")
 	rootCmd.Flags().StringVar(&record, "record", ".swe-sessions", "Session recordings directory")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed output")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt for builder")
 	rootCmd.Flags().BoolVar(&requireApproval, "require-approval", false, "Require user approval for tool executions (default: auto-approve)")
+	rootCmd.Flags().StringVar(&resumeSession, "resume", "", "Resume from a previous session ID")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -79,6 +81,7 @@ func run(cmd *cobra.Command, args []string) {
 		RecordingDir:    record,
 		SystemPrompt:    systemPrompt,
 		RequireApproval: requireApproval,
+		ResumeSessionID: resumeSession,
 		ReviewerModel:   reviewerModel,
 		Goal:            prompt, // Use prompt as goal
 		MaxBudgetUSD:    budget,

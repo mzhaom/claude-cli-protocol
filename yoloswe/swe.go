@@ -93,7 +93,8 @@ type Config struct {
 	BuilderWorkDir  string
 	RecordingDir    string
 	SystemPrompt    string
-	RequireApproval bool // Require user approval for tool executions (default: auto-approve)
+	RequireApproval bool   // Require user approval for tool executions (default: auto-approve)
+	ResumeSessionID string // Resume from a previous session ID instead of starting fresh
 
 	// Reviewer settings
 	ReviewerModel string
@@ -168,6 +169,7 @@ func New(config Config) *SWEWrapper {
 		SystemPrompt:    config.SystemPrompt,
 		Verbose:         config.Verbose,
 		RequireApproval: config.RequireApproval,
+		ResumeSessionID: config.ResumeSessionID,
 	}
 	builder := NewBuilderSession(builderConfig, output)
 
