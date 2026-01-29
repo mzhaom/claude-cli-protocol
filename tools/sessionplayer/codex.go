@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"unicode/utf8"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/codex"
 	codexrender "github.com/mzhaom/claude-cli-protocol/sdks/golang/codex/render"
@@ -214,50 +213,13 @@ func (p *CodexPlayer) handleExecOutput(params json.RawMessage) {
 		return
 	}
 
-	// Codex sometimes sends base64-encoded output - try to decode it
-	chunk := tryDecodeBase64(msg.Chunk)
+	// The Codex protocol always base64-encodes the chunk field
+	// (see codex-rs/protocol/src/protocol.rs ExecCommandOutputDeltaEvent)
+	chunk := msg.Chunk
+	if decoded, err := base64.StdEncoding.DecodeString(msg.Chunk); err == nil {
+		chunk = string(decoded)
+	}
 	p.renderer.CommandOutput(msg.CallID, chunk)
-}
-
-// tryDecodeBase64 attempts to decode a string as base64.
-// Returns the decoded string if it looks like valid base64, otherwise returns the original.
-func tryDecodeBase64(s string) string {
-	// Quick check: base64 strings are typically longer and contain only base64 chars
-	if len(s) < 20 {
-		return s
-	}
-
-	// If it already looks like valid UTF-8 text with common chars, don't decode
-	if utf8.ValidString(s) && containsCommonTextChars(s) {
-		return s
-	}
-
-	// Try to decode
-	decoded, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return s
-	}
-
-	// Check if decoded result is valid UTF-8 text
-	if utf8.Valid(decoded) {
-		return string(decoded)
-	}
-
-	return s
-}
-
-// containsCommonTextChars checks if string contains common text characters
-// that would indicate it's already plain text (not base64)
-func containsCommonTextChars(s string) bool {
-	for _, r := range s {
-		// Common text chars that wouldn't appear in base64 payloads
-		if r == ' ' || r == '\n' || r == '\t' || r == '{' || r == '}' ||
-			r == '(' || r == ')' || r == ':' || r == ';' || r == ',' ||
-			r == '"' || r == '\'' || r == '-' || r == '_' || r == '.' {
-			return true
-		}
-	}
-	return false
 }
 
 func (p *CodexPlayer) handleItemOutputDelta(params json.RawMessage) {
