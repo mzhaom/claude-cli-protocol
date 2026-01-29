@@ -298,6 +298,34 @@ func (s *Session) Interrupt(ctx context.Context) error {
 	return s.process.WriteMessage(req)
 }
 
+// SetModel sends a set_model control request to switch the model mid-session.
+func (s *Session) SetModel(ctx context.Context, model string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		// Not started - update config for spawn
+		s.config.Model = model
+		return nil
+	}
+
+	// Send control request
+	req := protocol.ControlRequestToSend{
+		Type:      "control_request",
+		RequestID: generateRequestID(),
+		Request: protocol.SetModelRequestToSend{
+			Subtype: "set_model",
+			Model:   model,
+		},
+	}
+
+	if s.recorder != nil {
+		s.recorder.RecordSent(req)
+	}
+
+	return s.process.WriteMessage(req)
+}
+
 // Stop gracefully shuts down the session.
 func (s *Session) Stop() error {
 	s.mu.Lock()

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
@@ -36,7 +38,11 @@ func NewBuilderSession(config BuilderConfig, output io.Writer) *BuilderSession {
 		config.Model = "sonnet"
 	}
 	if config.RecordingDir == "" {
-		config.RecordingDir = ".swe-sessions"
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			config.RecordingDir = filepath.Join(homeDir, ".yoloswe")
+		} else {
+			config.RecordingDir = ".yoloswe"
+		}
 	}
 	return &BuilderSession{
 		config:   config,

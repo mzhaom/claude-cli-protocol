@@ -3,11 +3,17 @@ package yoloswe
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestNewBuilderSession(t *testing.T) {
+	// Get expected default recording dir
+	homeDir, _ := os.UserHomeDir()
+	defaultRecordingDir := filepath.Join(homeDir, ".yoloswe")
+
 	tests := []struct {
 		name           string
 		config         BuilderConfig
@@ -18,7 +24,7 @@ func TestNewBuilderSession(t *testing.T) {
 			name:           "default values",
 			config:         BuilderConfig{},
 			expectedModel:  "sonnet",
-			expectedRecDir: ".swe-sessions",
+			expectedRecDir: defaultRecordingDir,
 		},
 		{
 			name: "custom values",
