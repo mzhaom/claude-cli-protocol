@@ -57,6 +57,8 @@ vendor/
 
 # Go binaries
 yoloplanner/yoloplanner
+yoloswe/yoloswe
+codex-review/codex-review
 multiagent/swarm
 experiments/plan_mode_analysis/plan_mode_analysis
 

@@ -26,6 +26,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "Show progress information (tool use, tokens, etc.)")
 	noColor := flag.Bool("no-color", false, "Disable ANSI color codes")
 	approvalPolicy := flag.String("approval", "on-failure", "Tool approval policy: untrusted, on-failure, on-request, never")
+	jsonOutput := flag.Bool("json", false, "Output review as structured JSON")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags]\n\n", os.Args[0])
@@ -60,7 +61,12 @@ func main() {
 	}
 
 	// Build the review prompt
-	prompt := reviewer.BuildPrompt(*goal)
+	var prompt string
+	if *jsonOutput {
+		prompt = reviewer.BuildJSONPrompt(*goal)
+	} else {
+		prompt = reviewer.BuildPrompt(*goal)
+	}
 
 	// Create reviewer
 	rev := reviewer.New(reviewer.Config{
@@ -71,6 +77,7 @@ func main() {
 		Verbose:        *verbose,
 		NoColor:        *noColor,
 		ApprovalPolicy: codex.ApprovalPolicy(*approvalPolicy),
+		JSONOutput:     *jsonOutput,
 	})
 
 	// Setup context with signal handling
