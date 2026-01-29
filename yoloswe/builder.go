@@ -20,7 +20,8 @@ type BuilderConfig struct {
 	RecordingDir    string
 	SystemPrompt    string
 	Verbose         bool
-	RequireApproval bool // Require user approval for tool executions (default: auto-approve)
+	RequireApproval bool   // Require user approval for tool executions (default: auto-approve)
+	ResumeSessionID string // Resume from a previous session ID
 }
 
 // BuilderSession wraps a claude.Session for builder operations.
@@ -75,6 +76,10 @@ func (b *BuilderSession) Start(ctx context.Context) error {
 
 	if b.config.SystemPrompt != "" {
 		opts = append(opts, claude.WithSystemPrompt(b.config.SystemPrompt))
+	}
+
+	if b.config.ResumeSessionID != "" {
+		opts = append(opts, claude.WithResume(b.config.ResumeSessionID))
 	}
 
 	b.session = claude.NewSession(opts...)

@@ -94,7 +94,8 @@ type Config struct {
 	BuilderWorkDir  string
 	RecordingDir    string
 	SystemPrompt    string
-	RequireApproval bool // Require user approval for tool executions (default: auto-approve)
+	RequireApproval bool   // Require user approval for tool executions (default: auto-approve)
+	ResumeSessionID string // Resume from a previous session ID instead of starting fresh
 
 	// Reviewer settings
 	ReviewerModel string
@@ -147,11 +148,13 @@ type ReviewVerdict struct {
 
 // SWEWrapper orchestrates the builder-reviewer loop.
 type SWEWrapper struct {
-	builder  *BuilderSession
-	reviewer *reviewer.Reviewer
-	config   Config
-	stats    Stats
-	output   io.Writer
+	builder     *BuilderSession
+	reviewer    *reviewer.Reviewer
+	config      Config
+	stats       Stats
+	output      io.Writer
+	sessionLog  string // Session log file path
+	startTime   time.Time
 }
 
 // New creates a new SWEWrapper with the given configuration.
@@ -169,6 +172,7 @@ func New(config Config) *SWEWrapper {
 		SystemPrompt:    config.SystemPrompt,
 		Verbose:         config.Verbose,
 		RequireApproval: config.RequireApproval,
+		ResumeSessionID: config.ResumeSessionID,
 	}
 	builder := NewBuilderSession(builderConfig, output)
 
@@ -184,10 +188,12 @@ func New(config Config) *SWEWrapper {
 	rev := reviewer.New(reviewerConfig)
 
 	return &SWEWrapper{
-		builder:  builder,
-		reviewer: rev,
-		config:   config,
-		output:   output,
+		builder:   builder,
+		reviewer:  rev,
+		config:    config,
+		output:    output,
+		sessionLog: "",
+		startTime: time.Now(),
 	}
 }
 
@@ -199,6 +205,11 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 		return fmt.Errorf("invalid prompt: %w", err)
 	}
 
+	// Initialize session log
+	if err := s.initSessionLog(prompt); err != nil {
+		fmt.Fprintf(s.output, "Warning: failed to initialize session log: %v\n", err)
+	}
+
 	startTime := time.Now()
 
 	// Start builder session
@@ -207,6 +218,9 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 		s.stats.ExitReason = ExitReasonError
 		return fmt.Errorf("failed to start builder: %w", err)
 	}
+	s.logEvent("builder_started", map[string]interface{}{
+		"model": s.config.BuilderModel,
+	})
 	defer func() {
 		if err := s.builder.Stop(); err != nil {
 			fmt.Fprintf(s.output, "Warning: error stopping builder: %v\n", err)
@@ -225,6 +239,9 @@ func (s *SWEWrapper) Run(ctx context.Context, prompt string) error {
 		s.stats.ExitReason = ExitReasonError
 		return fmt.Errorf("failed to start reviewer: %w", err)
 	}
+	s.logEvent("reviewer_started", map[string]interface{}{
+		"model": s.config.ReviewerModel,
+	})
 	defer func() {
 		if err := s.reviewer.Stop(); err != nil {
 			fmt.Fprintf(s.output, "Warning: error stopping reviewer: %v\n", err)
@@ -337,6 +354,21 @@ Please address this feedback and improve the implementation.`, verdict.Feedback)
 	}
 
 	s.stats.TotalDurationMs = time.Since(startTime).Milliseconds()
+
+	// Log session completion
+	s.logEvent("session_complete", map[string]interface{}{
+		"exit_reason":     s.stats.ExitReason,
+		"iterations":      s.stats.IterationCount,
+		"duration_ms":     s.stats.TotalDurationMs,
+		"builder_cost":    s.stats.BuilderCostUSD,
+		"builder_tokens":  s.stats.BuilderTokensIn + s.stats.BuilderTokensOut,
+		"reviewer_tokens": s.stats.ReviewerTokensIn + s.stats.ReviewerTokensOut,
+	})
+
+	if s.sessionLog != "" {
+		fmt.Fprintf(s.output, "\nSession log: %s\n", s.sessionLog)
+	}
+
 	return nil
 }
 
@@ -597,4 +629,70 @@ func (s *SWEWrapper) PrintSummary() {
 // Stats returns the current statistics.
 func (s *SWEWrapper) Stats() Stats {
 	return s.stats
+}
+
+// initSessionLog initializes the session log file.
+func (s *SWEWrapper) initSessionLog(prompt string) error {
+	// Ensure recording directory exists
+	if err := os.MkdirAll(s.config.RecordingDir, 0755); err != nil {
+		return fmt.Errorf("failed to create recording directory: %w", err)
+	}
+
+	// Create session log file with timestamp
+	timestamp := time.Now().Format("20060102-150405")
+	logFilename := fmt.Sprintf("session-%s.log", timestamp)
+	logPath := filepath.Join(s.config.RecordingDir, logFilename)
+
+	s.sessionLog = logPath
+
+	// Write initial log entry
+	entry := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"event":     "session_started",
+		"goal":      s.config.Goal,
+		"builder":   s.config.BuilderModel,
+		"reviewer":  s.config.ReviewerModel,
+		"budget":    s.config.MaxBudgetUSD,
+		"timeout":   s.config.MaxTimeSeconds,
+		"iterations": s.config.MaxIterations,
+	}
+	return s.appendLogEntry(entry)
+}
+
+// logEvent appends an event to the session log.
+func (s *SWEWrapper) logEvent(event string, data map[string]interface{}) {
+	if s.sessionLog == "" {
+		return
+	}
+
+	entry := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"event":     event,
+	}
+
+	// Merge data into entry
+	for k, v := range data {
+		entry[k] = v
+	}
+
+	if err := s.appendLogEntry(entry); err != nil {
+		fmt.Fprintf(s.output, "Warning: failed to log event: %v\n", err)
+	}
+}
+
+// appendLogEntry appends a JSON log entry to the session log file.
+func (s *SWEWrapper) appendLogEntry(entry map[string]interface{}) error {
+	jsonData, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(s.sessionLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(string(jsonData) + "\n")
+	return err
 }
