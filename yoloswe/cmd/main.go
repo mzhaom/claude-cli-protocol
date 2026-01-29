@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/mzhaom/claude-cli-protocol/yoloswe"
 	"github.com/spf13/cobra"

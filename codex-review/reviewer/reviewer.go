@@ -224,8 +224,7 @@ func (r *Reviewer) runTurn(ctx context.Context, prompt string) (*ReviewResult, e
 			return nil, ctx.Err()
 		case event, ok := <-r.client.Events():
 			if !ok {
-				result.ResponseText = responseText.String()
-				return result, nil
+				return nil, fmt.Errorf("event channel closed unexpectedly")
 			}
 
 			switch e := event.(type) {
