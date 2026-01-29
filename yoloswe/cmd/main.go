@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,54 +10,59 @@ import (
 	"syscall"
 
 	"github.com/mzhaom/claude-cli-protocol/yoloswe"
+	"github.com/spf13/cobra"
+)
+
+var (
+	builderModel    string
+	reviewerModel   string
+	dir             string
+	budget          float64
+	timeout         int
+	maxIterations   int
+	record          string
+	verbose         bool
+	systemPrompt    string
+	requireApproval bool
 )
 
 func main() {
-	// Define flags
-	builderModel := flag.String("builder-model", "sonnet", "Builder model: haiku, sonnet, opus")
-	reviewerModel := flag.String("reviewer-model", "gpt-5.2-codex", "Reviewer model: gpt-5.2-codex, o4-mini")
-	dir := flag.String("dir", "", "Working directory (default: current)")
-	budget := flag.Float64("budget", 5.0, "Max USD for builder session")
-	timeout := flag.Int("timeout", 600, "Max seconds")
-	maxIterations := flag.Int("max-iterations", 10, "Max builder-reviewer iterations")
-	goal := flag.String("goal", "", "Goal description for reviewer context")
-	record := flag.String("record", ".swe-sessions", "Session recordings directory")
-	verbose := flag.Bool("verbose", false, "Show detailed output")
-	systemPrompt := flag.String("system", "", "Custom system prompt for builder")
-	requireApproval := flag.Bool("require-approval", false, "Require user approval for tool executions (default: auto-approve)")
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: yoloswe [flags] <prompt>\n\n")
-		fmt.Fprintf(os.Stderr, "yoloswe runs a builder-reviewer loop for software engineering tasks.\n")
-		fmt.Fprintf(os.Stderr, "The builder (Claude) implements the task, and the reviewer (Codex) reviews.\n")
-		fmt.Fprintf(os.Stderr, "The loop continues until the reviewer accepts or limits are reached.\n\n")
-		fmt.Fprintf(os.Stderr, "Flags:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  yoloswe \"Add unit tests for the user service\"\n")
-		fmt.Fprintf(os.Stderr, "  yoloswe -budget 10 -timeout 1800 \"Refactor the database layer\"\n")
-		fmt.Fprintf(os.Stderr, "  yoloswe -builder-model opus \"Fix the authentication bug\"\n")
+	rootCmd := &cobra.Command{
+		Use:   "yoloswe [flags] <prompt>",
+		Short: "Run a builder-reviewer loop for software engineering tasks",
+		Long: `yoloswe runs a builder-reviewer loop for software engineering tasks.
+The builder (Claude) implements the task, and the reviewer (Codex) reviews.
+The loop continues until the reviewer accepts or limits are reached.`,
+		Example: `  yoloswe "Add unit tests for the user service"
+  yoloswe --budget 10 --timeout 1800 "Refactor the database layer"
+  yoloswe --builder-model opus "Fix the authentication bug"
+  yoloswe "Implement feature X" --timeout 7200  # flags work anywhere`,
+		Args: cobra.MinimumNArgs(1),
+		Run:  run,
 	}
 
-	flag.Parse()
+	// Define flags
+	rootCmd.Flags().StringVar(&builderModel, "builder-model", "sonnet", "Builder model: haiku, sonnet, opus")
+	rootCmd.Flags().StringVar(&reviewerModel, "reviewer-model", "gpt-5.2-codex", "Reviewer model: gpt-5.2-codex, o4-mini")
+	rootCmd.Flags().StringVar(&dir, "dir", "", "Working directory (default: current)")
+	rootCmd.Flags().Float64Var(&budget, "budget", 5.0, "Max USD for builder session")
+	rootCmd.Flags().IntVar(&timeout, "timeout", 600, "Max seconds")
+	rootCmd.Flags().IntVar(&maxIterations, "max-iterations", 10, "Max builder-reviewer iterations")
+	rootCmd.Flags().StringVar(&record, "record", ".swe-sessions", "Session recordings directory")
+	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed output")
+	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt for builder")
+	rootCmd.Flags().BoolVar(&requireApproval, "require-approval", false, "Require user approval for tool executions (default: auto-approve)")
 
-	// Get prompt from remaining args
-	args := flag.Args()
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "Error: prompt is required")
-		flag.Usage()
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func run(cmd *cobra.Command, args []string) {
 	prompt := strings.Join(args, " ")
 
-	// Use prompt as goal if goal not specified
-	goalText := *goal
-	if goalText == "" {
-		goalText = prompt
-	}
-
 	// Get working directory
-	workDir := *dir
+	workDir := dir
 	if workDir == "" {
 		var err error
 		workDir, err = os.Getwd()
@@ -68,19 +72,19 @@ func main() {
 		}
 	}
 
-	// Create config
+	// Create config - use prompt as the goal for reviewer context
 	config := yoloswe.Config{
-		BuilderModel:    *builderModel,
+		BuilderModel:    builderModel,
 		BuilderWorkDir:  workDir,
-		RecordingDir:    *record,
-		SystemPrompt:    *systemPrompt,
-		RequireApproval: *requireApproval,
-		ReviewerModel:   *reviewerModel,
-		Goal:            goalText,
-		MaxBudgetUSD:    *budget,
-		MaxTimeSeconds:  *timeout,
-		MaxIterations:   *maxIterations,
-		Verbose:         *verbose,
+		RecordingDir:    record,
+		SystemPrompt:    systemPrompt,
+		RequireApproval: requireApproval,
+		ReviewerModel:   reviewerModel,
+		Goal:            prompt, // Use prompt as goal
+		MaxBudgetUSD:    budget,
+		MaxTimeSeconds:  timeout,
+		MaxIterations:   maxIterations,
+		Verbose:         verbose,
 	}
 
 	// Setup context with cancellation
