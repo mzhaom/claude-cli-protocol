@@ -53,7 +53,7 @@ It helps you plan implementations by analyzing requirements and designing soluti
 	// Define flags
 	rootCmd.Flags().StringVar(&model, "model", "opus", "Model to use for planning: haiku, sonnet, opus")
 	rootCmd.Flags().StringVar(&workDir, "dir", "", "Working directory (defaults to current directory)")
-	rootCmd.Flags().StringVar(&recordDir, "record", ".planner-sessions", "Directory for session recordings")
+	rootCmd.Flags().StringVar(&recordDir, "record", "", "Directory for session recordings (defaults to ~/.yoloswe)")
 	rootCmd.Flags().StringVar(&systemPrompt, "system", "", "Custom system prompt")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed tool results (errors are always shown)")
 	rootCmd.Flags().BoolVar(&simple, "simple", false, "Auto-answer questions with first option and export plan on completion")
