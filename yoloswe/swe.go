@@ -68,6 +68,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -176,7 +177,7 @@ func New(config Config) *SWEWrapper {
 		Model:          config.ReviewerModel,
 		WorkDir:        config.BuilderWorkDir,
 		Goal:           config.Goal,
-		SessionLogPath: config.RecordingDir,
+		SessionLogPath: filepath.Join(config.RecordingDir, "reviewer.jsonl"),
 		Verbose:        config.Verbose,
 		JSONOutput:     true,
 	}

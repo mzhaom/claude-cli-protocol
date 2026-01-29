@@ -726,15 +726,29 @@ func (p *PlannerWrapper) executeWithExternalBuilder(ctx context.Context) (bool, 
 
 // validateExecutablePath checks if the path points to an executable file.
 // Returns absolute path if valid, error otherwise.
+// Supports both absolute/relative paths and bare executable names in PATH.
 func validateExecutablePath(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("empty path")
 	}
 
-	// Resolve to absolute path
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve path: %w", err)
+	// If path contains a separator, treat as file path (absolute or relative)
+	// Otherwise, try PATH lookup for bare executable name
+	var absPath string
+	if strings.ContainsRune(path, filepath.Separator) {
+		// Resolve to absolute path
+		var err error
+		absPath, err = filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve path: %w", err)
+		}
+	} else {
+		// Look up in PATH
+		var err error
+		absPath, err = exec.LookPath(path)
+		if err != nil {
+			return "", fmt.Errorf("executable not found in PATH: %s", path)
+		}
 	}
 
 	// Check file exists
