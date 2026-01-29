@@ -55,16 +55,16 @@ func TestNew_DefaultValues(t *testing.T) {
 	if r.output == nil {
 		t.Error("output should not be nil")
 	}
-	if r.verbose != nil {
-		t.Error("verbose should be nil by default")
+	if r.renderer == nil {
+		t.Error("renderer should not be nil")
 	}
 }
 
 func TestNew_WithVerbose(t *testing.T) {
 	r := New(Config{Verbose: true})
 
-	if r.verbose == nil {
-		t.Error("verbose should not be nil when Verbose is true")
+	if r.renderer == nil {
+		t.Error("renderer should not be nil when Verbose is true")
 	}
 }
 
