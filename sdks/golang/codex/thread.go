@@ -53,6 +53,12 @@ func (t *Thread) State() ThreadState {
 	return t.state.Current()
 }
 
+// WaitReady blocks until the thread is ready to receive messages.
+// Returns nil if ready, error if closed or context cancelled.
+func (t *Thread) WaitReady(ctx context.Context) error {
+	return t.state.WaitForReady(ctx)
+}
+
 // SendMessage sends a user message and starts a new turn.
 // Returns the turn ID.
 func (t *Thread) SendMessage(ctx context.Context, content string, opts ...TurnOption) (string, error) {

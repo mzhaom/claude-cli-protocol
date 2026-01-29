@@ -1,6 +1,9 @@
 package codex
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // ClientState represents the state of the client connection.
 type ClientState int
@@ -138,13 +141,16 @@ func (m *clientStateManager) IsReady() bool {
 // threadStateManager manages thread-safe thread state transitions.
 type threadStateManager struct {
 	mu    sync.RWMutex
+	cond  *sync.Cond
 	state ThreadState
 }
 
 func newThreadStateManager() *threadStateManager {
-	return &threadStateManager{
+	m := &threadStateManager{
 		state: ThreadStateCreating,
 	}
+	m.cond = sync.NewCond(&m.mu)
+	return m
 }
 
 // Current returns the current state.
@@ -173,6 +179,7 @@ func (m *threadStateManager) SetReady() error {
 		return ErrInvalidState
 	}
 	m.state = ThreadStateReady
+	m.cond.Broadcast()
 	return nil
 }
 
@@ -192,6 +199,38 @@ func (m *threadStateManager) SetClosed() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.state = ThreadStateClosed
+	m.cond.Broadcast()
+}
+
+// WaitForReady blocks until the state becomes Ready or Closed.
+// Returns nil if Ready, ErrClientClosed if Closed.
+func (m *threadStateManager) WaitForReady(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for m.state != ThreadStateReady && m.state != ThreadStateClosed {
+		// Use a goroutine to handle context cancellation
+		done := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				m.cond.Broadcast()
+			case <-done:
+			}
+		}()
+
+		m.cond.Wait()
+		close(done)
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+
+	if m.state == ThreadStateClosed {
+		return ErrClientClosed
+	}
+	return nil
 }
 
 // IsClosed returns true if the thread is closed.
