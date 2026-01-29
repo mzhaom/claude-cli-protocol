@@ -6,18 +6,38 @@ import (
 )
 
 func TestApprovalPolicy_Values(t *testing.T) {
+	// Test the canonical policy values
 	tests := []struct {
 		policy   ApprovalPolicy
 		expected string
 	}{
-		{ApprovalPolicySuggest, "suggest"},
-		{ApprovalPolicyAutoEdit, "auto-edit"},
-		{ApprovalPolicyFullAuto, "full-auto"},
+		{ApprovalPolicyUntrusted, "untrusted"},
+		{ApprovalPolicyOnFailure, "on-failure"},
+		{ApprovalPolicyOnRequest, "on-request"},
+		{ApprovalPolicyNever, "never"},
 	}
 
 	for _, tt := range tests {
 		if string(tt.policy) != tt.expected {
 			t.Errorf("ApprovalPolicy %v = %q, want %q", tt.policy, string(tt.policy), tt.expected)
+		}
+	}
+}
+
+func TestApprovalPolicy_DeprecatedAliases(t *testing.T) {
+	// Test that deprecated aliases map to the new canonical values
+	tests := []struct {
+		deprecated ApprovalPolicy
+		canonical  ApprovalPolicy
+	}{
+		{ApprovalPolicySuggest, ApprovalPolicyUntrusted},
+		{ApprovalPolicyAutoEdit, ApprovalPolicyOnFailure},
+		{ApprovalPolicyFullAuto, ApprovalPolicyNever},
+	}
+
+	for _, tt := range tests {
+		if tt.deprecated != tt.canonical {
+			t.Errorf("Deprecated alias %q should equal canonical %q", tt.deprecated, tt.canonical)
 		}
 	}
 }
