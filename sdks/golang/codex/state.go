@@ -1,6 +1,10 @@
 package codex
 
-import "sync"
+import (
+	"context"
+	"sync"
+	"time"
+)
 
 // ClientState represents the state of the client connection.
 type ClientState int
@@ -137,14 +141,18 @@ func (m *clientStateManager) IsReady() bool {
 
 // threadStateManager manages thread-safe thread state transitions.
 type threadStateManager struct {
-	mu    sync.RWMutex
-	state ThreadState
+	mu       sync.RWMutex
+	cond     *sync.Cond
+	state    ThreadState
+	startErr error // Error from startup (e.g., MCP initialization failure)
 }
 
 func newThreadStateManager() *threadStateManager {
-	return &threadStateManager{
+	m := &threadStateManager{
 		state: ThreadStateCreating,
 	}
+	m.cond = sync.NewCond(&m.mu)
+	return m
 }
 
 // Current returns the current state.
@@ -173,6 +181,7 @@ func (m *threadStateManager) SetReady() error {
 		return ErrInvalidState
 	}
 	m.state = ThreadStateReady
+	m.cond.Broadcast()
 	return nil
 }
 
@@ -192,6 +201,93 @@ func (m *threadStateManager) SetClosed() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.state = ThreadStateClosed
+	m.cond.Broadcast()
+}
+
+// SetError sets a startup error and wakes any waiters.
+// This is used when thread initialization fails (e.g., MCP startup error).
+func (m *threadStateManager) SetError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.startErr = err
+	m.cond.Broadcast()
+}
+
+// Error returns the startup error, if any.
+func (m *threadStateManager) Error() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.startErr
+}
+
+// WaitForReady blocks until the state becomes Ready, Closed, or an error occurs.
+// Returns nil if Ready, the startup error if one occurred, or ErrClientClosed if Closed.
+func (m *threadStateManager) WaitForReady(ctx context.Context) error {
+	// Create channels to communicate with the wait goroutine
+	resultCh := make(chan error, 1)
+	stopCh := make(chan struct{})
+
+	// Spawn goroutine to wait on the condition
+	go func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		for m.state != ThreadStateReady && m.state != ThreadStateClosed && m.startErr == nil {
+			// Non-blocking check for cancellation before waiting
+			select {
+			case <-stopCh:
+				resultCh <- ctx.Err()
+				return
+			default:
+			}
+
+			// Wait for state change
+			m.cond.Wait()
+
+			// Check for cancellation after waking up
+			select {
+			case <-stopCh:
+				resultCh <- ctx.Err()
+				return
+			default:
+			}
+		}
+
+		var err error
+		if m.startErr != nil {
+			err = m.startErr
+		} else if m.state == ThreadStateClosed {
+			err = ErrClientClosed
+		}
+		resultCh <- err
+	}()
+
+	// Goroutine to handle context cancellation
+	cancelDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			close(stopCh)
+			// Continuously broadcast to ensure we wake the waiter
+			// even if it hasn't entered Wait() yet
+			ticker := time.NewTicker(time.Microsecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-cancelDone:
+					return
+				case <-ticker.C:
+					m.cond.Broadcast()
+				}
+			}
+		case <-cancelDone:
+		}
+	}()
+
+	// Wait for result
+	err := <-resultCh
+	close(cancelDone)
+	return err
 }
 
 // IsClosed returns true if the thread is closed.

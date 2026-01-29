@@ -640,7 +640,18 @@ func (c *Client) handleCodexError(params json.RawMessage) {
 		return
 	}
 
-	c.emitError(notif.ConversationID, "", &ProtocolError{Message: string(notif.Msg)}, "codex_event_error")
+	threadID := notif.ConversationID
+	protocolErr := &ProtocolError{Message: string(notif.Msg)}
+
+	// Set error on thread to wake any waiters
+	c.mu.RLock()
+	thread, ok := c.threads[threadID]
+	c.mu.RUnlock()
+	if ok {
+		thread.setError(protocolErr)
+	}
+
+	c.emitError(threadID, "", protocolErr, "codex_event_error")
 }
 
 func (c *Client) handleItemStarted(params json.RawMessage) {
