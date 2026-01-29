@@ -240,7 +240,11 @@ func NewPlannerWrapper(config Config) *PlannerWrapper {
 		config.Model = "sonnet"
 	}
 	if config.RecordingDir == "" {
-		config.RecordingDir = ".planner-sessions"
+		if home, err := os.UserHomeDir(); err == nil {
+			config.RecordingDir = filepath.Join(home, ".yoloswe")
+		} else {
+			config.RecordingDir = ".planner-sessions"
+		}
 	}
 
 	return &PlannerWrapper{
@@ -374,7 +378,7 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 			// (not exporting), handleExitPlanMode will set it back to false
 			// since we're not waiting for user input during implementation.
 			p.waitingForUserInput = true
-			return p.handleExitPlanMode(ctx, e.Input)
+			return p.handleExitPlanMode(ctx, e.ID, e.Input)
 		}
 
 	case claude.CLIToolResultEvent:
@@ -501,7 +505,7 @@ func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, toolUseID st
 
 // handleExitPlanMode handles the ExitPlanMode tool call.
 // Returns (done, error) where done=true means the session should end.
-func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[string]interface{}) (bool, error) {
+func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, toolUseID string, input map[string]interface{}) (bool, error) {
 	p.renderer.PlanComplete(input)
 
 	// In simple mode with build flag, auto-execute
@@ -523,7 +527,7 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 	fmt.Println("  1. Execute in current session (keeps context)")
 	fmt.Println("  2. Execute in new session (fresh start)")
 	fmt.Println("  3. Export plan to markdown")
-	fmt.Println("  4. Continue refining (optional: add feedback)")
+	fmt.Println("  4. Continue refining")
 	fmt.Println()
 	fmt.Print("Enter choice (1-4) or feedback: ")
 
@@ -544,25 +548,13 @@ func (p *PlannerWrapper) handleExitPlanMode(ctx context.Context, input map[strin
 		filename := p.generatePlanFilename()
 		return p.exportPlanAndExit(ctx, filename)
 
-	case "4":
-		// Continue refining - prompt for optional feedback
-		fmt.Print("Enter feedback (or press Enter to continue): ")
-		feedback, err := p.readLineWithContext(ctx)
-		if err != nil {
-			return false, fmt.Errorf("failed to read feedback: %w", err)
-		}
-
-		msg := "Please continue refining the plan."
-		if feedback != "" {
-			msg = fmt.Sprintf("Please refine the plan with this feedback: %s", feedback)
-		}
-		_, err = p.session.SendMessage(ctx, msg)
-		return false, err
-
 	default:
-		// Treat any other input as direct feedback
-		msg := fmt.Sprintf("Please refine the plan with this feedback: %s", choice)
-		_, err := p.session.SendMessage(ctx, msg)
+		// Continue refining - option "4" or any other input as feedback
+		msg := "Please keep refining the plan."
+		if choice != "4" {
+			msg = fmt.Sprintf("Please refine the plan with this feedback: %s", choice)
+		}
+		_, err := p.session.SendToolResult(ctx, toolUseID, msg)
 		return false, err
 	}
 }
