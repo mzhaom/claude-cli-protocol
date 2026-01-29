@@ -316,3 +316,87 @@ func TestConnectionInfo(t *testing.T) {
 		t.Errorf("unexpected UserAgent: %q", info.UserAgent)
 	}
 }
+
+// Test handleExecCommandOutput base64 decoding
+func TestHandleExecCommandOutput_Base64Decoding(t *testing.T) {
+	tests := []struct {
+		name          string
+		chunk         string
+		expectedChunk string
+	}{
+		{
+			name:          "base64 encoded text",
+			chunk:         "SGVsbG8sIFdvcmxkIQ==", // "Hello, World!"
+			expectedChunk: "Hello, World!",
+		},
+		{
+			name:          "base64 encoded short text",
+			chunk:         "bHM=", // "ls"
+			expectedChunk: "ls",
+		},
+		{
+			name:          "base64 encoded JSON",
+			chunk:         "eyJuYW1lIjogInRlc3QifQ==", // {"name": "test"}
+			expectedChunk: `{"name": "test"}`,
+		},
+		{
+			name:          "base64 encoded multiline",
+			chunk:         "bGluZTEKbGluZTIKbGluZTM=", // "line1\nline2\nline3"
+			expectedChunk: "line1\nline2\nline3",
+		},
+		{
+			name:          "invalid base64 falls back to original",
+			chunk:         "not-valid-base64!!!",
+			expectedChunk: "not-valid-base64!!!",
+		},
+		{
+			name:          "empty string",
+			chunk:         "",
+			expectedChunk: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewClient(WithEventBufferSize(10))
+
+			// Build the nested JSON structure that handleExecCommandOutput expects
+			msg := ExecCommandOutputMsg{
+				Type:   "exec_command_output_delta",
+				CallID: "call123",
+				Stream: "stdout",
+				Chunk:  tt.chunk,
+			}
+			msgJSON, _ := json.Marshal(msg)
+
+			notif := CodexEventNotification{
+				ConversationID: "thread123",
+				Msg:            msgJSON,
+			}
+			notifJSON, _ := json.Marshal(notif)
+
+			// Call the handler
+			client.handleExecCommandOutput(notifJSON)
+
+			// Check the emitted event
+			select {
+			case event := <-client.events:
+				if e, ok := event.(CommandOutputEvent); ok {
+					if e.Chunk != tt.expectedChunk {
+						t.Errorf("Chunk = %q, want %q", e.Chunk, tt.expectedChunk)
+					}
+					if e.CallID != "call123" {
+						t.Errorf("CallID = %q, want %q", e.CallID, "call123")
+					}
+					if e.ThreadID != "thread123" {
+						t.Errorf("ThreadID = %q, want %q", e.ThreadID, "thread123")
+					}
+				} else {
+					t.Errorf("unexpected event type: %T", event)
+				}
+			case <-time.After(100 * time.Millisecond):
+				t.Error("event not received")
+			}
+		})
+	}
+}

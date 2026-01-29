@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"sync"
@@ -830,11 +831,18 @@ func (c *Client) handleExecCommandOutput(params json.RawMessage) {
 		return
 	}
 
+	// The Codex protocol always base64-encodes the chunk field
+	// (see codex-rs/protocol/src/protocol.rs ExecCommandOutputDeltaEvent)
+	chunk := msg.Chunk
+	if decoded, err := base64.StdEncoding.DecodeString(msg.Chunk); err == nil {
+		chunk = string(decoded)
+	}
+
 	c.emit(CommandOutputEvent{
 		ThreadID: notif.ConversationID,
 		CallID:   msg.CallID,
 		Stream:   msg.Stream,
-		Chunk:    msg.Chunk,
+		Chunk:    chunk,
 	})
 }
 
