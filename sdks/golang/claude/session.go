@@ -654,6 +654,38 @@ func (s *Session) handleResult(msg protocol.ResultMessage) {
 
 func (s *Session) handleControlRequest(msg protocol.ControlRequest) {
 	ctx := context.Background()
+
+	// Parse tool use request from control message
+	toolReq := protocol.ParseToolUseRequest(msg)
+
+	// Check if this is an interactive tool with a dedicated handler
+	if toolReq != nil && s.config.InteractiveToolHandler != nil {
+		var resp *protocol.ControlResponse
+		var err error
+
+		switch toolReq.ToolName {
+		case "AskUserQuestion":
+			resp, err = s.handleAskUserQuestionControl(ctx, msg.RequestID, toolReq)
+		case "ExitPlanMode":
+			resp, err = s.handleExitPlanModeControl(ctx, msg.RequestID, toolReq)
+		}
+
+		if err != nil {
+			s.emitError(err, "interactive_tool_handling")
+		}
+
+		if resp != nil {
+			if err := s.process.WriteMessage(resp); err != nil {
+				s.emitError(err, "send_control_response")
+			}
+			if s.recorder != nil {
+				s.recorder.RecordSent(resp)
+			}
+			return
+		}
+	}
+
+	// Delegate to permission manager for non-interactive tools
 	resp, err := s.permissionManager.HandleRequest(ctx, msg)
 	if err != nil {
 		s.emitError(err, "permission_handling")
@@ -667,6 +699,94 @@ func (s *Session) handleControlRequest(msg protocol.ControlRequest) {
 		if s.recorder != nil {
 			s.recorder.RecordSent(resp)
 		}
+	}
+}
+
+func (s *Session) handleAskUserQuestionControl(ctx context.Context, requestID string, toolReq *protocol.ToolUseRequest) (*protocol.ControlResponse, error) {
+	questions, err := ParseQuestionsFromInput(toolReq.Input)
+	if err != nil {
+		return buildDenyResponse(requestID, err.Error(), false), nil
+	}
+
+	answers, err := s.config.InteractiveToolHandler.HandleAskUserQuestion(ctx, questions)
+	if err != nil {
+		return buildDenyResponse(requestID, err.Error(), false), nil
+	}
+
+	// Embed answers in updatedInput for CLI to use
+	return buildAllowResponseWithAnswers(requestID, toolReq.Input, answers), nil
+}
+
+func (s *Session) handleExitPlanModeControl(ctx context.Context, requestID string, toolReq *protocol.ToolUseRequest) (*protocol.ControlResponse, error) {
+	planInfo, err := ParsePlanInfoFromInput(toolReq.Input)
+	if err != nil {
+		return buildDenyResponse(requestID, err.Error(), false), nil
+	}
+
+	feedback, err := s.config.InteractiveToolHandler.HandleExitPlanMode(ctx, planInfo)
+	if err != nil {
+		return buildDenyResponse(requestID, err.Error(), false), nil
+	}
+
+	// Embed feedback in updatedInput for CLI to use
+	return buildAllowResponseWithFeedback(requestID, toolReq.Input, feedback), nil
+}
+
+// buildDenyResponse builds a deny control response.
+func buildDenyResponse(requestID, message string, interrupt bool) *protocol.ControlResponse {
+	return &protocol.ControlResponse{
+		Type: protocol.MessageTypeControlResponse,
+		Response: protocol.ControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response: protocol.PermissionResultDeny{
+				Behavior:  protocol.PermissionBehaviorDeny,
+				Message:   message,
+				Interrupt: interrupt,
+			},
+		},
+	}
+}
+
+// buildAllowResponseWithAnswers builds an allow response with answers embedded in updatedInput.
+func buildAllowResponseWithAnswers(requestID string, originalInput map[string]interface{}, answers map[string]string) *protocol.ControlResponse {
+	updatedInput := make(map[string]interface{})
+	for k, v := range originalInput {
+		updatedInput[k] = v
+	}
+	updatedInput["answers"] = answers
+
+	return &protocol.ControlResponse{
+		Type: protocol.MessageTypeControlResponse,
+		Response: protocol.ControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response: protocol.PermissionResultAllow{
+				Behavior:     protocol.PermissionBehaviorAllow,
+				UpdatedInput: updatedInput,
+			},
+		},
+	}
+}
+
+// buildAllowResponseWithFeedback builds an allow response with feedback embedded in updatedInput.
+func buildAllowResponseWithFeedback(requestID string, originalInput map[string]interface{}, feedback string) *protocol.ControlResponse {
+	updatedInput := make(map[string]interface{})
+	for k, v := range originalInput {
+		updatedInput[k] = v
+	}
+	updatedInput["feedback"] = feedback
+
+	return &protocol.ControlResponse{
+		Type: protocol.MessageTypeControlResponse,
+		Response: protocol.ControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response: protocol.PermissionResultAllow{
+				Behavior:     protocol.PermissionBehaviorAllow,
+				UpdatedInput: updatedInput,
+			},
+		},
 	}
 }
 

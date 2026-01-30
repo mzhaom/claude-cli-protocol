@@ -82,8 +82,42 @@ func (b *BuilderSession) Start(ctx context.Context) error {
 		opts = append(opts, claude.WithResume(b.config.ResumeSessionID))
 	}
 
+	// Use interactive tool handler for AskUserQuestion (auto-answers)
+	opts = append(opts, claude.WithInteractiveToolHandler(&builderInteractiveHandler{b}))
+
 	b.session = claude.NewSession(opts...)
 	return b.session.Start(ctx)
+}
+
+// builderInteractiveHandler implements claude.InteractiveToolHandler for the builder.
+type builderInteractiveHandler struct {
+	b *BuilderSession
+}
+
+// HandleAskUserQuestion auto-answers questions by selecting the first option.
+func (h *builderInteractiveHandler) HandleAskUserQuestion(ctx context.Context, questions []claude.Question) (map[string]string, error) {
+	answers := make(map[string]string)
+
+	for _, q := range questions {
+		var response string
+		if len(q.Options) > 0 {
+			// Select first option
+			response = q.Options[0].Label
+			h.b.renderer.Status(fmt.Sprintf("Auto-answering: %s -> %s", q.Text, response))
+		} else {
+			// No options, use default "yes"
+			response = "yes"
+			h.b.renderer.Status(fmt.Sprintf("Auto-answering (no options): %s -> %s", q.Text, response))
+		}
+		answers[q.Text] = response
+	}
+
+	return answers, nil
+}
+
+// HandleExitPlanMode auto-approves plans (builder doesn't use plan mode).
+func (h *builderInteractiveHandler) HandleExitPlanMode(ctx context.Context, plan claude.PlanInfo) (string, error) {
+	return "Approved. Please proceed with implementation.", nil
 }
 
 // Stop gracefully shuts down the session. Safe to call before Start.
@@ -130,14 +164,7 @@ func (b *BuilderSession) RunTurn(ctx context.Context, message string) (*claude.T
 
 			case claude.ToolCompleteEvent:
 				b.renderer.ToolComplete(e.Name, e.Input)
-
-				// Handle AskUserQuestion by auto-selecting first option
-				if e.Name == "AskUserQuestion" {
-					response := b.autoAnswerQuestion(e.Input)
-					if _, err := b.session.SendToolResult(ctx, e.ID, response); err != nil {
-						return nil, fmt.Errorf("failed to send tool result: %w", err)
-					}
-				}
+				// Note: AskUserQuestion is now handled by InteractiveToolHandler
 
 			case claude.CLIToolResultEvent:
 				b.renderer.ToolResult(e.Content, e.IsError)
@@ -156,125 +183,6 @@ func (b *BuilderSession) RunTurn(ctx context.Context, message string) (*claude.T
 			}
 		}
 	}
-}
-
-// autoAnswerQuestion automatically responds to AskUserQuestion prompts from the builder.
-// This enables autonomous operation by selecting reasonable defaults without user intervention.
-//
-// The function implements intelligent fallback logic:
-//  1. For questions with explicit options: selects the first option
-//  2. For multi-select questions: selects only the first option (conservative approach)
-//  3. For questions without options: infers answer based on question keywords
-//     - "continue", "proceed", "confirm" -> "yes"
-//     - "which", "select", "choose" -> "first option"
-//     - default -> "yes"
-//  4. For malformed or missing questions: returns safe default message
-//
-// Parameters:
-//   - input: The AskUserQuestion tool input containing questions array
-//
-// Returns:
-//   - A formatted string response suitable for SendToolResult
-//
-// Edge cases handled:
-//   - nil input map
-//   - missing or malformed questions array
-//   - questions without text or options
-//   - options as strings vs. objects with label/description
-//   - multiSelect flag handling
-func (b *BuilderSession) autoAnswerQuestion(input map[string]interface{}) string {
-	// Validate input structure
-	if input == nil {
-		b.renderer.Status("Auto-answering: no questions provided, proceeding with default")
-		return "Proceeding with default option."
-	}
-
-	questions, ok := input["questions"].([]interface{})
-	if !ok || len(questions) == 0 {
-		b.renderer.Status("Auto-answering: no questions array found, proceeding with default")
-		return "Proceeding with default option."
-	}
-
-	var responses []string
-	for i, q := range questions {
-		qMap, ok := q.(map[string]interface{})
-		if !ok {
-			b.renderer.Status(fmt.Sprintf("Auto-answering: skipping malformed question %d", i))
-			continue
-		}
-
-		question, _ := qMap["question"].(string)
-		if question == "" {
-			question = fmt.Sprintf("Question %d", i+1)
-		}
-
-		// Check for multiSelect flag
-		multiSelect, _ := qMap["multiSelect"].(bool)
-
-		optionsRaw, _ := qMap["options"].([]interface{})
-
-		var response string
-		if len(optionsRaw) > 0 {
-			// Parse first option (or multiple if multiSelect)
-			opt := optionsRaw[0]
-			switch v := opt.(type) {
-			case string:
-				response = v
-			case map[string]interface{}:
-				if label, ok := v["label"].(string); ok {
-					response = label
-				} else if desc, ok := v["description"].(string); ok {
-					// Fallback to description if no label
-					response = desc
-				} else {
-					response = "Option 1"
-				}
-			default:
-				response = "Option 1"
-			}
-
-			// For multiSelect, only select first option
-			if multiSelect && len(optionsRaw) > 1 {
-				b.renderer.Status(fmt.Sprintf("Auto-answering (multi-select): %s -> %s (selecting first option only)", question, response))
-			} else {
-				b.renderer.Status(fmt.Sprintf("Auto-answering: %s -> %s", question, response))
-			}
-		} else {
-			// No options provided, use intelligent default
-			questionLower := strings.ToLower(question)
-			if strings.Contains(questionLower, "continue") ||
-				strings.Contains(questionLower, "proceed") ||
-				strings.Contains(questionLower, "confirm") {
-				response = "yes"
-			} else if strings.Contains(questionLower, "which") ||
-				strings.Contains(questionLower, "select") ||
-				strings.Contains(questionLower, "choose") {
-				response = "first option"
-			} else {
-				response = "yes"
-			}
-			b.renderer.Status(fmt.Sprintf("Auto-answering (no options): %s -> %s", question, response))
-		}
-
-		responses = append(responses, fmt.Sprintf("Q: %s\nA: %s", question, response))
-	}
-
-	if len(responses) == 0 {
-		return "Proceeding with default option."
-	}
-
-	return "User responses:\n" + joinStrings(responses, "\n")
-}
-
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for _, s := range strs[1:] {
-		result += sep + s
-	}
-	return result
 }
 
 // RecordingPath returns the path to the session recording directory.

@@ -69,21 +69,16 @@ func newPermissionManager(handler PermissionHandler) *permissionManager {
 // ExtractPermissionRequest extracts a permission request from a control request.
 // Returns nil if the control request is not a permission request.
 func (pm *permissionManager) ExtractPermissionRequest(msg protocol.ControlRequest) *PermissionRequest {
-	reqData, err := protocol.ParseControlRequest(msg.Request)
-	if err != nil {
-		return nil
-	}
-
-	canUseTool, ok := reqData.(protocol.CanUseToolRequest)
-	if !ok {
+	toolReq := protocol.ParseToolUseRequest(msg)
+	if toolReq == nil {
 		return nil
 	}
 
 	return &PermissionRequest{
-		RequestID:   msg.RequestID,
-		ToolName:    canUseTool.ToolName,
-		Input:       canUseTool.Input,
-		BlockedPath: canUseTool.BlockedPath,
+		RequestID:   toolReq.RequestID,
+		ToolName:    toolReq.ToolName,
+		Input:       toolReq.Input,
+		BlockedPath: toolReq.BlockedPath,
 	}
 }
 

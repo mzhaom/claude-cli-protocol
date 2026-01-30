@@ -179,6 +179,134 @@ func TestPermissionResultDeny_JSONSerialization(t *testing.T) {
 	}
 }
 
+func TestParseToolUseRequest(t *testing.T) {
+	tests := []struct {
+		name         string
+		request      ControlRequest
+		expectNil    bool
+		expectedTool string
+	}{
+		{
+			name: "can_use_tool request",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_123",
+				Request:   json.RawMessage(`{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"echo hi"}}`),
+			},
+			expectNil:    false,
+			expectedTool: "Bash",
+		},
+		{
+			name: "AskUserQuestion request",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_456",
+				Request:   json.RawMessage(`{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[]}}`),
+			},
+			expectNil:    false,
+			expectedTool: "AskUserQuestion",
+		},
+		{
+			name: "ExitPlanMode request",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_789",
+				Request:   json.RawMessage(`{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{}}`),
+			},
+			expectNil:    false,
+			expectedTool: "ExitPlanMode",
+		},
+		{
+			name: "set_permission_mode request - returns nil",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_000",
+				Request:   json.RawMessage(`{"subtype":"set_permission_mode","mode":"plan"}`),
+			},
+			expectNil: true,
+		},
+		{
+			name: "interrupt request - returns nil",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_111",
+				Request:   json.RawMessage(`{"subtype":"interrupt"}`),
+			},
+			expectNil: true,
+		},
+		{
+			name: "invalid JSON - returns nil",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_222",
+				Request:   json.RawMessage(`not valid json`),
+			},
+			expectNil: true,
+		},
+		{
+			name: "with blocked_path",
+			request: ControlRequest{
+				Type:      MessageTypeControlRequest,
+				RequestID: "req_333",
+				Request:   json.RawMessage(`{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"/etc/passwd"},"blocked_path":"/etc/passwd"}`),
+			},
+			expectNil:    false,
+			expectedTool: "Write",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseToolUseRequest(tt.request)
+
+			if tt.expectNil {
+				if result != nil {
+					t.Errorf("expected nil, got %+v", result)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+
+			if result.RequestID != tt.request.RequestID {
+				t.Errorf("expected request ID %q, got %q", tt.request.RequestID, result.RequestID)
+			}
+
+			if result.ToolName != tt.expectedTool {
+				t.Errorf("expected tool name %q, got %q", tt.expectedTool, result.ToolName)
+			}
+
+			if result.Input == nil {
+				t.Error("expected non-nil input")
+			}
+		})
+	}
+}
+
+func TestParseToolUseRequest_BlockedPath(t *testing.T) {
+	blockedPath := "/etc/passwd"
+	request := ControlRequest{
+		Type:      MessageTypeControlRequest,
+		RequestID: "req_blocked",
+		Request:   json.RawMessage(`{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"/etc/passwd"},"blocked_path":"/etc/passwd"}`),
+	}
+
+	result := ParseToolUseRequest(request)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if result.BlockedPath == nil {
+		t.Fatal("expected non-nil blocked_path")
+	}
+
+	if *result.BlockedPath != blockedPath {
+		t.Errorf("expected blocked_path %q, got %q", blockedPath, *result.BlockedPath)
+	}
+}
+
 func TestControlResponse_FullStructure(t *testing.T) {
 	// Test the complete control response structure with proper input
 	response := ControlResponse{
