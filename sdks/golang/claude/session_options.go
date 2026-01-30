@@ -44,6 +44,10 @@ type SessionConfig struct {
 	// PermissionHandler handles permission requests in default mode.
 	PermissionHandler PermissionHandler
 
+	// InteractiveToolHandler handles interactive tools (AskUserQuestion, ExitPlanMode).
+	// These tools require user input, not permission approval.
+	InteractiveToolHandler InteractiveToolHandler
+
 	// EventBufferSize is the event channel buffer size (default: 100).
 	EventBufferSize int
 
@@ -127,6 +131,15 @@ func WithRecording(dir string) SessionOption {
 func WithPermissionHandler(h PermissionHandler) SessionOption {
 	return func(c *SessionConfig) {
 		c.PermissionHandler = h
+	}
+}
+
+// WithInteractiveToolHandler sets a handler for interactive tools
+// (AskUserQuestion, ExitPlanMode). These tools require user input,
+// not permission approval, so they bypass the permission handler.
+func WithInteractiveToolHandler(handler InteractiveToolHandler) SessionOption {
+	return func(c *SessionConfig) {
+		c.InteractiveToolHandler = handler
 	}
 }
 

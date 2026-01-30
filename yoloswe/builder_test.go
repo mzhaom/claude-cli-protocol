@@ -2,11 +2,12 @@ package yoloswe
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/mzhaom/claude-cli-protocol/sdks/golang/claude"
 )
 
 func TestNewBuilderSession(t *testing.T) {
@@ -67,94 +68,57 @@ func TestNewBuilderSession(t *testing.T) {
 	}
 }
 
-func TestAutoAnswerQuestion(t *testing.T) {
+func TestHandleAskUserQuestion(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected string
+		name            string
+		questions       []claude.Question
+		expectedAnswers map[string]string
 	}{
 		{
-			name:     "nil input",
-			input:    nil,
-			expected: "Proceeding with default option.",
+			name:            "empty questions",
+			questions:       []claude.Question{},
+			expectedAnswers: map[string]string{},
 		},
 		{
-			name:     "empty input",
-			input:    map[string]interface{}{},
-			expected: "Proceeding with default option.",
-		},
-		{
-			name: "no questions array",
-			input: map[string]interface{}{
-				"questions": "not an array",
-			},
-			expected: "Proceeding with default option.",
-		},
-		{
-			name: "single question with string options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Choose an option?",
-						"options":  []interface{}{"option1", "option2"},
-					},
+			name: "single question with options",
+			questions: []claude.Question{
+				{
+					Text:    "Choose an option?",
+					Options: []claude.QuestionOption{{Label: "option1"}, {Label: "option2"}},
 				},
 			},
-			expected: "User responses:\nQ: Choose an option?\nA: option1",
-		},
-		{
-			name: "single question with label options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Select library?",
-						"options": []interface{}{
-							map[string]interface{}{"label": "React"},
-							map[string]interface{}{"label": "Vue"},
-						},
-					},
-				},
+			expectedAnswers: map[string]string{
+				"Choose an option?": "option1",
 			},
-			expected: "User responses:\nQ: Select library?\nA: React",
 		},
 		{
 			name: "multiple questions",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Question 1?",
-						"options":  []interface{}{"a", "b"},
-					},
-					map[string]interface{}{
-						"question": "Question 2?",
-						"options": []interface{}{
-							map[string]interface{}{"label": "yes"},
-						},
-					},
+			questions: []claude.Question{
+				{
+					Text:    "Question 1?",
+					Options: []claude.QuestionOption{{Label: "a"}, {Label: "b"}},
+				},
+				{
+					Text:    "Question 2?",
+					Options: []claude.QuestionOption{{Label: "yes"}},
 				},
 			},
-			expected: "User responses:\nQ: Question 1?\nA: a\nQ: Question 2?\nA: yes",
+			expectedAnswers: map[string]string{
+				"Question 1?": "a",
+				"Question 2?": "yes",
+			},
 		},
 		{
 			name: "question with no options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Continue?",
-						"options":  []interface{}{},
-					},
+			questions: []claude.Question{
+				{
+					Text:    "Continue?",
+					Options: []claude.QuestionOption{},
 				},
 			},
-			expected: "User responses:\nQ: Continue?\nA: yes",
-		},
-		{
-			name: "malformed question object",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					"not a map",
-				},
+			expectedAnswers: map[string]string{
+				"Continue?": "yes",
 			},
-			expected: "Proceeding with default option.",
 		},
 	}
 
@@ -162,55 +126,41 @@ func TestAutoAnswerQuestion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			builder := NewBuilderSession(BuilderConfig{}, &buf)
-			result := builder.autoAnswerQuestion(tt.input)
+			handler := &builderInteractiveHandler{b: builder}
 
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
+			answers, err := handler.HandleAskUserQuestion(context.Background(), tt.questions)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(answers) != len(tt.expectedAnswers) {
+				t.Errorf("expected %d answers, got %d", len(tt.expectedAnswers), len(answers))
+			}
+
+			for q, expectedA := range tt.expectedAnswers {
+				if answers[q] != expectedA {
+					t.Errorf("for question %q: expected %q, got %q", q, expectedA, answers[q])
+				}
 			}
 		})
 	}
 }
 
-func TestJoinStrings(t *testing.T) {
-	tests := []struct {
-		name     string
-		strs     []string
-		sep      string
-		expected string
-	}{
-		{
-			name:     "empty array",
-			strs:     []string{},
-			sep:      ",",
-			expected: "",
-		},
-		{
-			name:     "single element",
-			strs:     []string{"hello"},
-			sep:      ",",
-			expected: "hello",
-		},
-		{
-			name:     "multiple elements with comma",
-			strs:     []string{"a", "b", "c"},
-			sep:      ",",
-			expected: "a,b,c",
-		},
-		{
-			name:     "multiple elements with newline",
-			strs:     []string{"first", "second", "third"},
-			sep:      "\n",
-			expected: "first\nsecond\nthird",
-		},
+func TestHandleExitPlanMode(t *testing.T) {
+	var buf bytes.Buffer
+	builder := NewBuilderSession(BuilderConfig{}, &buf)
+	handler := &builderInteractiveHandler{b: builder}
+
+	feedback, err := handler.HandleExitPlanMode(context.Background(), claude.PlanInfo{
+		Plan: "Test plan",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := joinStrings(tt.strs, tt.sep)
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
-			}
-		})
+	expected := "Approved. Please proceed with implementation."
+	if feedback != expected {
+		t.Errorf("expected %q, got %q", expected, feedback)
 	}
 }
 
@@ -288,117 +238,40 @@ func TestBuilderStartWithInvalidWorkDir(t *testing.T) {
 	t.Skip("Requires integration test to verify error handling")
 }
 
-func TestAutoAnswerQuestionEdgeCases(t *testing.T) {
+func TestHandleAskUserQuestionEdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected string
+		name            string
+		questions       []claude.Question
+		expectedAnswers map[string]string
 	}{
 		{
-			name: "multiSelect flag with multiple options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question":    "Select features?",
-						"multiSelect": true,
-						"options": []interface{}{
-							map[string]interface{}{"label": "Feature A"},
-							map[string]interface{}{"label": "Feature B"},
-							map[string]interface{}{"label": "Feature C"},
-						},
+			name: "multiSelect flag with multiple options - selects first",
+			questions: []claude.Question{
+				{
+					Text:        "Select features?",
+					MultiSelect: true,
+					Options: []claude.QuestionOption{
+						{Label: "Feature A"},
+						{Label: "Feature B"},
+						{Label: "Feature C"},
 					},
 				},
 			},
-			expected: "User responses:\nQ: Select features?\nA: Feature A",
+			expectedAnswers: map[string]string{
+				"Select features?": "Feature A",
+			},
 		},
 		{
-			name: "question with description fallback",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Pick approach?",
-						"options": []interface{}{
-							map[string]interface{}{"description": "Use caching"},
-						},
-					},
+			name: "question with no options uses yes",
+			questions: []claude.Question{
+				{
+					Text:    "Which approach should we use?",
+					Options: []claude.QuestionOption{},
 				},
 			},
-			expected: "User responses:\nQ: Pick approach?\nA: Use caching",
-		},
-		{
-			name: "empty question text defaults",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "",
-						"options":  []interface{}{"opt1"},
-					},
-				},
+			expectedAnswers: map[string]string{
+				"Which approach should we use?": "yes",
 			},
-			expected: "User responses:\nQ: Question 1\nA: opt1",
-		},
-		{
-			name: "question with 'which' keyword and no options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Which approach should we use?",
-						"options":  []interface{}{},
-					},
-				},
-			},
-			expected: "User responses:\nQ: Which approach should we use?\nA: first option",
-		},
-		{
-			name: "question with 'select' keyword and no options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Select the best option?",
-						"options":  []interface{}{},
-					},
-				},
-			},
-			expected: "User responses:\nQ: Select the best option?\nA: first option",
-		},
-		{
-			name: "question with 'choose' keyword and no options",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Choose a method?",
-						"options":  []interface{}{},
-					},
-				},
-			},
-			expected: "User responses:\nQ: Choose a method?\nA: first option",
-		},
-		{
-			name: "mixed valid and invalid questions",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					"invalid",
-					map[string]interface{}{
-						"question": "Valid question?",
-						"options":  []interface{}{"yes", "no"},
-					},
-				},
-			},
-			expected: "User responses:\nQ: Valid question?\nA: yes",
-		},
-		{
-			name: "option without label or description",
-			input: map[string]interface{}{
-				"questions": []interface{}{
-					map[string]interface{}{
-						"question": "Test?",
-						"options": []interface{}{
-							map[string]interface{}{"other": "value"},
-						},
-					},
-				},
-			},
-			expected: "User responses:\nQ: Test?\nA: Option 1",
 		},
 	}
 
@@ -406,10 +279,17 @@ func TestAutoAnswerQuestionEdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			builder := NewBuilderSession(BuilderConfig{}, &buf)
-			result := builder.autoAnswerQuestion(tt.input)
+			handler := &builderInteractiveHandler{b: builder}
 
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
+			answers, err := handler.HandleAskUserQuestion(context.Background(), tt.questions)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			for q, expectedA := range tt.expectedAnswers {
+				if answers[q] != expectedA {
+					t.Errorf("for question %q: expected %q, got %q", q, expectedA, answers[q])
+				}
 			}
 		})
 	}
@@ -423,30 +303,28 @@ func TestBuilderNilOutput(t *testing.T) {
 	}
 }
 
-func TestAutoAnswerQuestionPerformance(t *testing.T) {
+func TestHandleAskUserQuestionPerformance(t *testing.T) {
 	// Test with many questions to ensure no performance issues
-	questions := make([]interface{}, 100)
+	// Each question needs a unique Text to get separate answer entries
+	questions := make([]claude.Question, 100)
 	for i := 0; i < 100; i++ {
-		questions[i] = map[string]interface{}{
-			"question": fmt.Sprintf("Question %d?", i),
-			"options":  []interface{}{"a", "b", "c"},
+		questions[i] = claude.Question{
+			Text:    "Question " + string(rune('A'+i/26)) + string(rune('a'+i%26)) + "?",
+			Options: []claude.QuestionOption{{Label: "a"}, {Label: "b"}, {Label: "c"}},
 		}
-	}
-
-	input := map[string]interface{}{
-		"questions": questions,
 	}
 
 	var buf bytes.Buffer
 	builder := NewBuilderSession(BuilderConfig{}, &buf)
+	handler := &builderInteractiveHandler{b: builder}
 
-	result := builder.autoAnswerQuestion(input)
+	answers, err := handler.HandleAskUserQuestion(context.Background(), questions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Should handle all questions
-	if !strings.Contains(result, "Question 0?") {
-		t.Error("should process first question")
-	}
-	if !strings.Contains(result, "Question 99?") {
-		t.Error("should process last question")
+	if len(answers) != 100 {
+		t.Errorf("expected 100 answers, got %d", len(answers))
 	}
 }

@@ -169,3 +169,32 @@ type SetModelRequestToSend struct {
 	Subtype string `json:"subtype"`
 	Model   string `json:"model"`
 }
+
+// ToolUseRequest contains parsed information about a tool use from a control request.
+type ToolUseRequest struct {
+	RequestID   string                 // The control request ID
+	ToolName    string                 // Name of the tool being used
+	Input       map[string]interface{} // Tool input parameters
+	BlockedPath *string                // Path that triggered permission (if any)
+}
+
+// ParseToolUseRequest extracts tool use information from a control request.
+// Returns nil if the request is not a can_use_tool request.
+func ParseToolUseRequest(msg ControlRequest) *ToolUseRequest {
+	reqData, err := ParseControlRequest(msg.Request)
+	if err != nil {
+		return nil
+	}
+
+	canUseTool, ok := reqData.(CanUseToolRequest)
+	if !ok {
+		return nil
+	}
+
+	return &ToolUseRequest{
+		RequestID:   msg.RequestID,
+		ToolName:    canUseTool.ToolName,
+		Input:       canUseTool.Input,
+		BlockedPath: canUseTool.BlockedPath,
+	}
+}

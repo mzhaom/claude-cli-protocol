@@ -247,17 +247,75 @@ func NewPlannerWrapper(config Config) *PlannerWrapper {
 		}
 	}
 
-	return &PlannerWrapper{
+	p := &PlannerWrapper{
 		config:   config,
 		renderer: NewRenderer(os.Stdout, config.Verbose),
 	}
+
+	return p
+}
+
+// plannerInteractiveHandler implements claude.InteractiveToolHandler for the planner.
+type plannerInteractiveHandler struct {
+	p *PlannerWrapper
+}
+
+// HandleAskUserQuestion collects user responses for AskUserQuestion.
+func (h *plannerInteractiveHandler) HandleAskUserQuestion(ctx context.Context, questions []claude.Question) (map[string]string, error) {
+	answers := make(map[string]string)
+
+	for i, q := range questions {
+		// Convert to render options
+		options := make([]render.QuestionOption, len(q.Options))
+		for j, opt := range q.Options {
+			options[j] = render.QuestionOption{Label: opt.Label}
+		}
+
+		// In simple mode, auto-select first option but show full question
+		if h.p.config.Simple && len(options) > 0 {
+			response := options[0].Label
+			h.p.renderer.QuestionAutoAnswer(q.Text, "", options, 0)
+			answers[q.Text] = response
+			continue
+		}
+
+		h.p.renderer.QuestionWithOptions(q.Text, "", options)
+
+		fmt.Printf("\nYour answer: ")
+		response, err := h.p.readLineWithContext(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read user input: %w", err)
+		}
+
+		// Handle numeric selection
+		if len(options) > 0 {
+			if idx := parseOptionIndex(response, len(options)); idx >= 0 {
+				response = options[idx].Label
+			}
+		}
+
+		answers[q.Text] = response
+		fmt.Printf("  [Q%d] Selected: %s\n", i+1, response)
+	}
+
+	return answers, nil
+}
+
+// HandleExitPlanMode is not used by yoloplanner - ExitPlanMode is handled
+// in the event loop via handleExitPlanMode method for more complex logic.
+// This handler just returns approval to allow the tool to proceed.
+func (h *plannerInteractiveHandler) HandleExitPlanMode(ctx context.Context, plan claude.PlanInfo) (string, error) {
+	// Return empty string - yoloplanner handles ExitPlanMode in the event loop
+	// via ToolCompleteEvent where it has access to toolUseID for refinement feedback.
+	return "", nil
 }
 
 // Start initializes and starts the underlying claude session.
 //
 // The session is configured with:
 //   - PermissionModeDefault: Start without plan mode flag, allowing control message switch
-//   - AllowAllPermissionHandler: Auto-approve all tool executions (replaces --dangerously-skip-permissions)
+//   - Custom permission handler: Auto-approves most tools, but handles AskUserQuestion
+//     specially by collecting user input and embedding answers in updatedInput
 //   - Recording enabled: All messages are recorded for debugging/replay
 //
 // After starting, we switch to plan mode via a control message. This approach
@@ -270,8 +328,10 @@ func (p *PlannerWrapper) Start(ctx context.Context) error {
 		claude.WithPermissionMode(claude.PermissionModeDefault),
 		// Route all permission prompts through stdio protocol
 		claude.WithPermissionPromptToolStdio(),
-		// Auto-approve all permissions instead of using --dangerously-skip-permissions
+		// Auto-approve all permission requests
 		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
+		// Use interactive tool handler for AskUserQuestion
+		claude.WithInteractiveToolHandler(&plannerInteractiveHandler{p}),
 		claude.WithRecording(p.config.RecordingDir),
 	}
 
@@ -370,10 +430,10 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 		p.trackPlanFileWrite(e.Name, e.Input)
 
 		// Handle special interactive tools
-		if e.Name == "AskUserQuestion" {
-			p.waitingForUserInput = true
-			return false, p.handleAskUserQuestion(ctx, e.ID, e.Input)
-		} else if e.Name == "ExitPlanMode" {
+		// Note: AskUserQuestion is now handled in the permission handler
+		// (createPermissionHandler) which collects user input and embeds answers
+		// in updatedInput before the CLI executes the tool. No action needed here.
+		if e.Name == "ExitPlanMode" {
 			// Note: We set waitingForUserInput=true here, but if we're executing
 			// (not exporting), handleExitPlanMode will set it back to false
 			// since we're not waiting for user input during implementation.
@@ -445,62 +505,6 @@ func (p *PlannerWrapper) handleEvent(ctx context.Context, event claude.Event) (b
 	}
 
 	return false, nil
-}
-
-// handleAskUserQuestion handles the AskUserQuestion tool call.
-// The toolUseID is used to send the response as a proper tool_result.
-func (p *PlannerWrapper) handleAskUserQuestion(ctx context.Context, toolUseID string, input map[string]interface{}) error {
-	questions, ok := input["questions"].([]interface{})
-	if !ok {
-		return fmt.Errorf("invalid AskUserQuestion input: missing questions array")
-	}
-
-	var responses []string
-
-	for i, q := range questions {
-		qMap, ok := q.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		question, _ := qMap["question"].(string)
-		header, _ := qMap["header"].(string)
-		optionsRaw, _ := qMap["options"].([]interface{})
-
-		// Parse options - can be strings or objects with label/description
-		options := render.ParseQuestionOptions(optionsRaw)
-
-		// In simple mode, auto-select first option but show full question
-		if p.config.Simple && len(options) > 0 {
-			response := options[0].Label
-			p.renderer.QuestionAutoAnswer(question, header, options, 0)
-			responses = append(responses, response)
-			continue
-		}
-
-		p.renderer.QuestionWithOptions(question, header, options)
-
-		fmt.Printf("\nYour answer: ")
-		response, err := p.readLineWithContext(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to read user input: %w", err)
-		}
-
-		// Handle numeric selection
-		if len(options) > 0 {
-			if idx := parseOptionIndex(response, len(options)); idx >= 0 {
-				response = options[idx].Label
-			}
-		}
-
-		responses = append(responses, response)
-		fmt.Printf("  [Q%d] Selected: %s\n", i+1, response)
-	}
-
-	// Format response and send as tool_result to properly associate with the tool call
-	responseMsg := formatQuestionResponses(questions, responses)
-	_, err := p.session.SendToolResult(ctx, toolUseID, responseMsg)
-	return err
 }
 
 // handleExitPlanMode handles the ExitPlanMode tool call.
@@ -660,7 +664,10 @@ func (p *PlannerWrapper) executeInNewSession(ctx context.Context) (bool, error) 
 		claude.WithModel(modelToUse),
 		claude.WithPermissionMode(claude.PermissionModeBypass),
 		claude.WithPermissionPromptToolStdio(),
+		// Auto-approve all permission requests
 		claude.WithPermissionHandler(claude.AllowAllPermissionHandler()),
+		// Use interactive tool handler for AskUserQuestion
+		claude.WithInteractiveToolHandler(&plannerInteractiveHandler{p}),
 		claude.WithRecording(p.config.RecordingDir),
 	}
 	if p.config.WorkDir != "" {
@@ -839,26 +846,6 @@ func parseOptionIndex(input string, numOptions int) int {
 		return -1
 	}
 	return idx - 1
-}
-
-// formatQuestionResponses formats question responses for sending back to Claude.
-func formatQuestionResponses(questions []interface{}, responses []string) string {
-	var sb strings.Builder
-	sb.WriteString("User responses:\n")
-
-	for i, q := range questions {
-		if i >= len(responses) {
-			break
-		}
-		qMap, ok := q.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		question, _ := qMap["question"].(string)
-		sb.WriteString(fmt.Sprintf("- Q: %s\n  A: %s\n", question, responses[i]))
-	}
-
-	return sb.String()
 }
 
 // RecordingPath returns the path to the session recording directory.
