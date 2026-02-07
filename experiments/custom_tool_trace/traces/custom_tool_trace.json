@@ -1,0 +1,573 @@
+{
+  "description": "Full protocol trace for custom Python tool call via claude-agent-sdk",
+  "generated_at": "2026-02-06T22:38:22.322757+00:00",
+  "sdk_version": "0.1.31",
+  "tool_definition": {
+    "name": "greet",
+    "description": "Greet someone by name",
+    "input_schema": {
+      "name": "str"
+    },
+    "server_name": "demo_tools",
+    "tool_wire_name": "mcp__demo_tools__greet"
+  },
+  "messages_sent": [
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": "Use the greet tool with name 'Alice'"
+      }
+    }
+  ],
+  "messages_received": [
+    {
+      "_type": "SystemMessage",
+      "subtype": "init",
+      "data": {
+        "type": "system",
+        "subtype": "init",
+        "cwd": "/private/tmp/<tmpdir>",
+        "session_id": "00000000-0000-0000-0000-000000000000",
+        "tools": [
+          "Task",
+          "TaskOutput",
+          "Bash",
+          "Glob",
+          "Grep",
+          "ExitPlanMode",
+          "Read",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "WebFetch",
+          "WebSearch",
+          "TaskStop",
+          "AskUserQuestion",
+          "Skill",
+          "EnterPlanMode",
+          "TaskCreate",
+          "TaskGet",
+          "TaskUpdate",
+          "TaskList",
+          "ToolSearch",
+          "mcp__demo_tools__greet"
+        ],
+        "mcp_servers": [
+          {
+            "name": "demo_tools",
+            "status": "connected"
+          }
+        ],
+        "model": "claude-haiku-4-5-20251001",
+        "permissionMode": "default",
+        "slash_commands": [
+          "keybindings-help",
+          "debug",
+          "compact",
+          "context",
+          "cost",
+          "init",
+          "pr-comments",
+          "release-notes",
+          "review",
+          "security-review",
+          "insights"
+        ],
+        "apiKeySource": "none",
+        "claude_code_version": "2.1.33",
+        "output_style": "default",
+        "agents": [
+          "Bash",
+          "general-purpose",
+          "statusline-setup",
+          "Explore",
+          "Plan"
+        ],
+        "skills": [
+          "keybindings-help",
+          "debug"
+        ],
+        "plugins": [],
+        "uuid": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    {
+      "_type": "AssistantMessage",
+      "content": [
+        {
+          "_type": "ToolUseBlock",
+          "id": "toolu_011ps2HcHPddjonXwz1ezAnE",
+          "name": "mcp__demo_tools__greet",
+          "input": {
+            "name": "Alice"
+          }
+        }
+      ],
+      "model": "claude-haiku-4-5-20251001",
+      "parent_tool_use_id": null,
+      "error": null
+    },
+    {
+      "_type": "UserMessage",
+      "content": [
+        {
+          "_type": "ToolResultBlock",
+          "tool_use_id": "toolu_011ps2HcHPddjonXwz1ezAnE",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello, Alice! Welcome."
+            }
+          ],
+          "is_error": null
+        }
+      ],
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "parent_tool_use_id": null,
+      "tool_use_result": [
+        {
+          "type": "text",
+          "text": "Hello, Alice! Welcome."
+        }
+      ]
+    },
+    {
+      "_type": "AssistantMessage",
+      "content": [
+        {
+          "_type": "TextBlock",
+          "text": "Hello! I've greeted Alice for you. The greeting was successful: \"Hello, Alice! Welcome.\""
+        }
+      ],
+      "model": "claude-haiku-4-5-20251001",
+      "parent_tool_use_id": null,
+      "error": null
+    },
+    {
+      "_type": "ResultMessage",
+      "subtype": "success",
+      "duration_ms": 1599,
+      "duration_api_ms": 1580,
+      "is_error": false,
+      "num_turns": 2,
+      "session_id": "00000000-0000-0000-0000-000000000000",
+      "total_cost_usd": 0.0035969,
+      "usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 31639,
+        "output_tokens": 85,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        }
+      },
+      "result": "Hello! I've greeted Alice for you. The greeting was successful: \"Hello, Alice! Welcome.\"",
+      "structured_output": null
+    }
+  ],
+  "control_messages": [
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "claude-code",
+              "version": "2.1.33"
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 0
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.091736+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "initialize"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.092085+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "id": 0,
+              "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                  "tools": {}
+                },
+                "serverInfo": {
+                  "name": "demo_tools",
+                  "version": "1.0.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "notifications/initialized",
+          "jsonrpc": "2.0"
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.092939+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "notifications/initialized"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.093000+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "result": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "claude-code",
+              "version": "2.1.33"
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 0
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.093514+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "initialize"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.093625+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "id": 0,
+              "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                  "tools": {}
+                },
+                "serverInfo": {
+                  "name": "demo_tools",
+                  "version": "1.0.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "tools/list",
+          "jsonrpc": "2.0",
+          "id": 1
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.093930+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "tools/list"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.094373+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "result": {
+                "tools": [
+                  {
+                    "name": "greet",
+                    "description": "Greet someone by name",
+                    "inputSchema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "notifications/initialized",
+          "jsonrpc": "2.0"
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.095682+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "notifications/initialized"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.095753+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "result": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "tools/list",
+          "jsonrpc": "2.0",
+          "id": 1
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.096470+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "tools/list"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.096580+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "result": {
+                "tools": [
+                  {
+                    "name": "greet",
+                    "description": "Greet someone by name",
+                    "inputSchema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "can_use_tool",
+      "request": {
+        "subtype": "can_use_tool",
+        "tool_name": "mcp__demo_tools__greet",
+        "input": {
+          "name": "Alice"
+        },
+        "permission_suggestions": [
+          {
+            "type": "addRules",
+            "rules": [
+              {
+                "toolName": "mcp__demo_tools__greet"
+              }
+            ],
+            "behavior": "allow",
+            "destination": "localSettings"
+          }
+        ],
+        "tool_use_id": "toolu_011ps2HcHPddjonXwz1ezAnE"
+      },
+      "timestamp": "2026-02-06T22:38:20.882452+00:00"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "can_use_tool",
+      "timestamp": "2026-02-06T22:38:20.882663+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "behavior": "allow",
+            "updatedInput": {
+              "name": "Alice"
+            }
+          }
+        }
+      }
+    },
+    {
+      "direction": "cli_to_sdk",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "request": {
+        "subtype": "mcp_message",
+        "server_name": "demo_tools",
+        "message": {
+          "method": "tools/call",
+          "params": {
+            "name": "greet",
+            "arguments": {
+              "name": "Alice"
+            },
+            "_meta": {
+              "claudecode/toolUseId": "toolu_011ps2HcHPddjonXwz1ezAnE",
+              "progressToken": 2
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 2
+        }
+      },
+      "timestamp": "2026-02-06T22:38:20.886242+00:00",
+      "server_name": "demo_tools",
+      "jsonrpc_method": "tools/call"
+    },
+    {
+      "direction": "sdk_to_cli",
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "subtype": "mcp_message",
+      "timestamp": "2026-02-06T22:38:20.887711+00:00",
+      "response": {
+        "type": "control_response",
+        "response": {
+          "subtype": "success",
+          "request_id": "00000000-0000-0000-0000-000000000000",
+          "response": {
+            "mcp_response": {
+              "jsonrpc": "2.0",
+              "id": 2,
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Hello, Alice! Welcome."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "permission_events": [
+    {
+      "tool_name": "mcp__demo_tools__greet",
+      "input": {
+        "name": "Alice"
+      },
+      "timestamp": "2026-02-06T22:38:20.882501+00:00"
+    }
+  ]
+}
